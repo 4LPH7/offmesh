@@ -13,6 +13,10 @@ import 'transport.dart';
 /// Protocol name mixed into every handshake, so peers on another version cannot connect.
 final Uint8List meshPrologue = Uint8List.fromList(utf8.encode('offmesh/1'));
 
+/// Bounds on state an unauthenticated peer can make us allocate.
+const int maxPendingHandshakes = 32;
+const int maxQueuedPerPeer = 64;
+
 const int _handshakeOneLength = 32; // e
 const int _handshakeTwoMinLength = 96; // e, encrypted s, encrypted empty payload
 
@@ -87,7 +91,11 @@ class MeshNode {
       await _sendEncrypted(peerId, session, plaintext, ttl);
       return;
     }
-    _queues.putIfAbsent(key, () => []).add(_QueuedMessage(plaintext, ttl));
+    final queue = _queues.putIfAbsent(key, () => []);
+    if (queue.length >= maxQueuedPerPeer) {
+      throw StateError('too many messages waiting for $key');
+    }
+    queue.add(_QueuedMessage(plaintext, ttl));
     if (!_initiators.containsKey(key) && !_responders.containsKey(key)) {
       await _startHandshake(peerId);
     }
@@ -119,9 +127,28 @@ class MeshNode {
       prologue: meshPrologue,
       expectedResponderPeerId: peerId,
     );
-    _initiators[peerId.hex] = initiator;
+    _rememberInitiator(peerId.hex, initiator);
     await _sendHandshake(peerId, await initiator.writeMessage(Uint8List(0)));
   }
+
+  void _rememberInitiator(String key, NoiseHandshake handshake) {
+    _initiators[key] = handshake;
+    _evictOldest(_initiators);
+  }
+
+  void _rememberResponder(String key, NoiseHandshake handshake) {
+    _responders[key] = handshake;
+    _evictOldest(_responders);
+  }
+
+  static void _evictOldest(Map<String, NoiseHandshake> pending) {
+    while (pending.length > maxPendingHandshakes) {
+      pending.remove(pending.keys.first);
+    }
+  }
+
+  /// Number of responder handshakes awaiting their final message (exposed for tests).
+  int get pendingResponderCount => _responders.length;
 
   /// Handshake messages are told apart by length: message 1 is the bare ephemeral key,
   /// message 2 is the longest, message 3 is in between.
@@ -156,7 +183,7 @@ class MeshNode {
     );
     await responder.readMessage(packet.payload);
     final message2 = await responder.writeMessage(Uint8List(0));
-    _responders[key] = responder;
+    _rememberResponder(key, responder);
     await _sendHandshake(packet.senderId, message2);
   }
 
