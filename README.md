@@ -1,16 +1,51 @@
-# offmesh
+# OffMesh v0.1 (test build)
 
-A new Flutter project.
+Offline, end-to-end encrypted messaging over phone-to-phone links. No internet, SIM or server.
+Based on the "Decentralized Offline Voice and Mesh Communication" whitepaper, Tiers 1 and 2 only.
 
-## Getting Started
+## What works in v0.1
 
-This project is a starting point for a Flutter application.
+- Noise XX handshake (`Noise_XX_25519_ChaChaPoly_SHA256`) checked against the published
+  cacophony test vector. The responder's identity is checked before the initiator reveals its own key.
+- Mesh routing by flooding, with duplicate suppression, TTL, and jittered relays.
+  Relays forward ciphertext they cannot read (tested).
+- Multi-hop encrypted messages with fragmentation for payloads up to ~56 KB.
+- LAN links over Wi-Fi or a phone hotspot: TCP with framed packets, UDP beacons for discovery,
+  manual IP:port connect.
+- A single screen: my ID, connect, add contact by ID, chat.
 
-A few resources to get you started if this is your first Flutter project:
+## Not in v0.1
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- Bluetooth mesh (Tier 2 radio). The router is ready for it; no BLE transport yet.
+- Voice calls, LoRa, HF.
+- Persistent identity and message history: both live in memory and reset on app restart.
+- Out-of-order transport messages: a message that arrives after a later one on the same
+  session is dropped (Noise's implicit nonce). Fine on a single hop; to be fixed in v0.2.
+- Key verification (QR/safety numbers). Contacts are trusted by pasting their ID.
+- Simultaneous duplicate TCP links can briefly drop both; beacons reconnect within a few seconds.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Run the tests
+
+```bash
+flutter test
+flutter analyze
+```
+
+## Build for phones
+
+```bash
+flutter build apk --debug
+```
+
+Install `build/app/outputs/flutter-apk/app-debug.apk` on Android phones.
+
+## Two-phone test
+
+1. Phone A turns on a Wi-Fi hotspot. Phone B joins it.
+2. Open the app on both. Each shows its ID and "Listening on port N".
+3. On B, enter A's IP (usually `192.168.43.1`) and port, then Connect. Beacons usually link them automatically.
+4. Copy A's ID, paste it into B's contact field, and send a message. Then reply from A.
+5. Turn off mobile data and Wi-Fi internet to confirm nothing leaves the local network.
+
+For multi-hop: add a third phone C linked to B only, and message C from A using C's ID.
+A's message must pass through B.

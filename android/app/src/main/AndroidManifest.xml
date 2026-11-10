@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Sockets on the local network only (LAN links, UDP beacons). No internet is used. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="offmesh"
         android:name="${applicationName}"
