@@ -83,6 +83,10 @@ class MeshNode {
 
   Future<void> stop() => _router.stop();
 
+  void addTransport(MeshTransport transport) => _router.addTransport(transport);
+
+  Future<void> removeTransport(MeshTransport transport) => _router.removeTransport(transport);
+
   /// Sends [plaintext] to [peerId], handshaking first if there is no session yet.
   Future<void> sendText(Uint8List peerId, Uint8List plaintext, {int ttl = maxTtl}) async {
     final key = peerId.hex;

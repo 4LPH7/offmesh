@@ -25,7 +25,7 @@ class MeshRouter {
     Random? random,
     Pause? delay,
     DateTime Function()? clock,
-  })  : _transports = List.unmodifiable(transports),
+  })  : _transports = List.of(transports),
         _onDeliver = onDeliver,
         _seen = seenCache ?? SeenCache(clock: clock ?? DateTime.now),
         _random = random ?? Random.secure(),
@@ -37,21 +37,40 @@ class MeshRouter {
   final SeenCache _seen;
   final Random _random;
   final Pause _delay;
-  final List<StreamSubscription<Uint8List>> _subscriptions = [];
+  final Map<MeshTransport, StreamSubscription<Uint8List>> _subscriptions = {};
+  bool _started = false;
 
   void start() {
+    _started = true;
     for (final transport in _transports) {
-      _subscriptions.add(
-        transport.incoming.listen((frame) => _onFrame(transport, frame)),
-      );
+      _attach(transport);
     }
   }
 
+  /// Adds a link that appeared at runtime (a LAN socket, a BLE connection).
+  void addTransport(MeshTransport transport) {
+    if (_transports.contains(transport)) return;
+    _transports.add(transport);
+    if (_started) _attach(transport);
+  }
+
+  /// Removes a link that closed. Packets are no longer sent or received on it.
+  Future<void> removeTransport(MeshTransport transport) async {
+    _transports.remove(transport);
+    await _subscriptions.remove(transport)?.cancel();
+  }
+
   Future<void> stop() async {
-    for (final subscription in _subscriptions) {
+    _started = false;
+    for (final subscription in _subscriptions.values) {
       await subscription.cancel();
     }
     _subscriptions.clear();
+  }
+
+  void _attach(MeshTransport transport) {
+    _subscriptions[transport] =
+        transport.incoming.listen((frame) => _onFrame(transport, frame));
   }
 
   /// Sends a packet this node created. It is recorded as seen first so the echo is dropped.
@@ -81,7 +100,7 @@ class MeshRouter {
 
   Future<void> _sendEverywhere(Uint8List frame, {required MeshTransport? except}) async {
     await Future.wait([
-      for (final transport in _transports)
+      for (final transport in List.of(_transports))
         if (!identical(transport, except)) transport.send(frame),
     ]);
   }
