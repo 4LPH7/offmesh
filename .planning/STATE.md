@@ -4,7 +4,7 @@ status: planning
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 1
+  total_plans: 4
   completed_plans: 0
   percent: 0
 ---
@@ -14,22 +14,32 @@ progress:
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-11-13)
+See: docs/mission_plan.md (tactical architecture & mission plan)
 
-**Core value:** Zero-infrastructure phone-to-phone private communication across a 4-tier stock smartphone mesh stack.
-**Current focus:** Phase 1: Pure-Dart Protocol, Noise XX & Multi-Hop Simulator
+**Core value:** Zero-infrastructure, metadata-sanitized phone-to-phone private mesh communicator with strict emission control.
+**Current focus:** Phase 1: Hardened Pure-Dart Protocol Core
 
 ## Current Position
 
-Phase: 1 of 6 (Pure-Dart Protocol, Noise XX & Multi-Hop Simulator)
-Plan: 0 of 1 in current phase
-Status: In progress (core protocol & tests landed; aligning file names & multi-hop simulator)
-Last activity: 2026-11-13 — Pivoted architecture to 100% stock-smartphone 4-tier stack and initialized roadmap.
+Phase: 1 of 6 (Hardened Pure-Dart Protocol Core)
+Plan: 0 of 4 in current phase
+Status: Ready to execute Phase 1 plans
+Last activity: 2026-11-13 — Synthesized research (Reticulum, Briar, Meshtastic, BitChat); drafted mission plan; restructured 6-phase roadmap.
 
 Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+- Total tests: 78 passing (core protocol, cacophony vector, LAN loopback, beacon discovery)
+- Lints: clean (`flutter analyze`)
+- Architecture: 100% stock-smartphone 4-tier stack (no external radio hardware)
 
 ## Accumulated Context
 
 ### Decisions
 
-- Architecture pivoted from external radios (ESP32/LoRa/HF) to 100% stock-smartphone 4-tier stack (WLAN, Wi-Fi Direct, BLE 5.0, DTN).
-- 6-milestone roadmap established covering protocol, LAN/UI, BLE mesh, DTN store-and-forward, Wi-Fi Direct WebRTC, and Codec2 PTT.
+- Adopted Reticulum outer symmetric sealing and BitChat rotating hourly HMAC IDs to eliminate cleartext metadata leaks.
+- Adopted Meshtastic managed flooding: relay cancelation when neighbor relays first + reverse-path table.
+- Dropped full-duplex WebRTC to prevent continuous RF beacons; retained half-duplex Codec2 (1200 bps) PTT.
+- Added EMCON posture switch (Silent/Quiet/Normal), panic wipe, and duress PIN.
+- Phase 1 partitioned into 4 pure-Dart plans (<100 lines each): routing table/suppression, sealed envelope, rotating IDs, and end-to-end ACKs.
