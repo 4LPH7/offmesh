@@ -1,61 +1,37 @@
-# OffMesh v0.1 (test build)
+# OffMesh
 
-Offline, end-to-end encrypted messaging over phone-to-phone links. No internet, SIM or server.
-Based on the "Decentralized Offline Voice and Mesh Communication" whitepaper, Tiers 1 and 2 only.
+**100% Smartphone-Native Offline Encrypted Mesh Messenger & Voice Communicator**  
+*Zero internet. Zero SIM recharge. Zero central servers. Zero external hardware.*
 
-## What works in v0.1
+OffMesh turns standard, unmodified smartphones into a self-healing, multi-hop communication network. Built in Flutter for Android (with Windows Desktop support for local testing), it routes end-to-end encrypted messages, Push-to-Talk (PTT) voice bursts, and full-duplex voice calls directly between devices using built-in Wi-Fi, Wi-Fi Direct, Multi-Hop Bluetooth 5.0, and Delay-Tolerant Store-and-Forward routing.
 
-- Noise XX handshake (`Noise_XX_25519_ChaChaPoly_SHA256`) checked against the published
-  cacophony test vector. The responder's identity is checked before the initiator reveals its own key.
-- Mesh routing by flooding, with duplicate suppression, TTL, and jittered relays.
-  Relays forward ciphertext they cannot read (tested).
-- Multi-hop encrypted messages with fragmentation for payloads up to ~56 KB.
-- LAN links over Wi-Fi or a phone hotspot: TCP with framed packets, UDP beacons for discovery,
-  manual IP:port connect.
-- A single screen: my ID, connect, add contact by ID, chat.
+---
 
-## Architecture & Module Organization
+## Smartphone-Only 4-Tier Architecture
 
-OffMesh is structured into decoupled core layers:
+| Tier | Transport Mechanism | Range / Coverage | Capabilities |
+|---|---|---|---|
+| **Tier 1 (LAN / Hotspot)** | mDNS + UDP Broadcast + TCP over shared Wi-Fi or zero-data Hotspot | 50 m – 150 m | Full-duplex WebRTC Opus calls & instant chat |
+| **Tier 2 (Direct P2P)** | Wi-Fi Direct / Wi-Fi Aware routerless phone-to-phone link | 100 m – 200 m | Routerless full-duplex voice calls & fast sync |
+| **Tier 3 (Live BLE Mesh)** | Dual-role BLE 5.0 Central + GATT Peripheral (LE Coded PHY) | Up to 15 hops (~1–3 km chain) | Live multi-hop chat & `Codec2` 1200 bps PTT voice |
+| **Tier 4 (DTN Store & Forward)** | Spray-and-Wait encrypted custody cache carried by moving peers | City-wide / Unlimited | Asynchronous delivery of text & compressed voice notes |
 
-- **Crypto (`lib/core/crypto/`)**: Noise XX (`Noise_XX_25519_ChaChaPoly_SHA256`) state machine and static key management with mutual authentication.
-- **Protocol (`lib/core/protocol/`)**: 26-byte binary packet header codec, message fragmentation / reassembly (up to ~56 KB payload), and seen cache for flood deduplication.
-- **Mesh (`lib/core/mesh/`)**: Mesh router implementing TTL-bounded flooding, relay jitter, loop suppression, and per-peer transmission queues.
-- **Transports (`lib/transports/`)**: Length-prefixed TCP socket framing, UDP beacon broadcast discovery on port 47999, and connection lifecycle management.
-- **App & UI (`lib/app/`, `lib/ui/`)**: State controllers, contact threading, and responsive Flutter interface.
+---
 
-## Not in v0.1
+## Security & Protocol Guarantees
 
-- Bluetooth mesh (Tier 2 radio). The router is ready for it; no BLE transport yet.
-- Voice calls, LoRa, HF.
-- Persistent identity and message history: both live in memory and reset on app restart.
-- Out-of-order transport messages: a message that arrives after a later one on the same
-  session is dropped (Noise's implicit nonce). Fine on a single hop; to be fixed in v0.2.
-- Key verification (QR/safety numbers). Contacts are trusted by pasting their ID.
-- Simultaneous duplicate TCP links can briefly drop both; beacons reconnect within a few seconds.
+* **Identity:** Static `X25519` keypair stored in Android Keystore; `PeerID = SHA-256(pubKey)[0..8]`.
+* **Session Cryptography:** `Noise_XX_25519_ChaChaPoly_SHA256` with responder static key verification on Message 2, deterministic glare resolution, and strict monotonic nonce discipline.
+* **Zero-Trust Multi-Hop Relaying:** Intermediate BLE and DTN carrier nodes only see the 26-byte outer routing header or sealed DTN envelope; payloads remain encrypted end-to-end.
+* **Out-of-Band Key Pinning:** Peers display as `unverified` until full 256-bit public keys are verified via in-app QR scan.
 
-## Run the tests
+---
 
-```bash
-flutter test
-flutter analyze
-```
+## Milestone Roadmap
 
-## Build for phones
-
-```bash
-flutter build apk --debug
-```
-
-Install `build/app/outputs/flutter-apk/app-debug.apk` on Android phones.
-
-## Two-phone test
-
-1. Phone A turns on a Wi-Fi hotspot. Phone B joins it.
-2. Open the app on both. Each shows its ID and "Listening on port N".
-3. On B, enter A's IP (usually `192.168.43.1`) and port, then Connect. Beacons usually link them automatically.
-4. Copy A's ID, paste it into B's contact field, and send a message. Then reply from A.
-5. Turn off mobile data and Wi-Fi internet to confirm nothing leaves the local network.
-
-For multi-hop: add a third phone C linked to B only, and message C from A using C's ID.
-A's message must pass through B.
+- [ ] **Milestone 1:** Pure-Dart protocol core (`Packet`, `Fragmenter`, `Dedup`, `Noise_XX`, `Router`, and multi-node `FakeTransport` test suite)
+- [ ] **Milestone 2:** Tier 1 LAN/Hotspot transport + SQLite (`sqflite_common_ffi`) persistence + 1:1 encrypted chat & QR verification UI
+- [ ] **Milestone 3:** Tier 3 Dual-role BLE 5.0 multi-hop mesh transport + Android foreground relay service
+- [ ] **Milestone 4:** Tier 4 Delay-Tolerant Networking (DTN) Spray-and-Wait store-and-forward engine for long-distance offline delivery
+- [ ] **Milestone 5:** Tier 2 Routerless Wi-Fi Direct bridge + Serverless WebRTC (`iceServers: []`) full-duplex voice calls
+- [ ] **Milestone 6:** Native CMake `libcodec2` (1200 bps) FFI integration for ultra-low-bitrate Push-to-Talk over BLE mesh and DTN voice notes
