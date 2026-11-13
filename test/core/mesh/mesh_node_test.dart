@@ -38,12 +38,14 @@ class _Harness {
     final topology = FakeTopology(count, edges);
     final nodes = <MeshNode>[];
     for (var i = 0; i < count; i++) {
-      nodes.add(MeshNode(
-        identity: await Identity.generate(),
-        transports: topology.transportsOf(i),
-        random: Random(i),
-        delay: _noDelay,
-      )..start());
+      nodes.add(
+        MeshNode(
+          identity: await Identity.generate(),
+          transports: topology.transportsOf(i),
+          random: Random(i),
+          delay: _noDelay,
+        )..start(),
+      );
     }
     final inbox = List.generate(count, (_) => <ReceivedMessage>[]);
     for (var i = 0; i < count; i++) {
@@ -61,19 +63,32 @@ void main() {
   group('MeshNode over a 5-node line (A-B-C-D-E)', () {
     const line = [(0, 1), (1, 2), (2, 3), (3, 4)];
 
-    test('delivers an encrypted message across four hops, only to the recipient', () async {
-      final h = await _Harness.build(5, line);
+    test(
+      'delivers an encrypted message across four hops, only to the recipient',
+      () async {
+        final h = await _Harness.build(5, line);
 
-      await h.nodes[0].sendText(h.nodes[4].peerId, _utf8('hello across four hops'));
-      await pumpEventQueue();
+        await h.nodes[0].sendText(
+          h.nodes[4].peerId,
+          _utf8('hello across four hops'),
+        );
+        await pumpEventQueue();
 
-      expect(h.inbox[4], hasLength(1));
-      expect(utf8.decode(h.inbox[4].single.plaintext), 'hello across four hops');
-      expect(h.inbox[4].single.senderId, h.nodes[0].peerId);
-      for (final relay in [0, 1, 2, 3]) {
-        expect(h.inbox[relay], isEmpty, reason: 'node $relay must not receive it');
-      }
-    });
+        expect(h.inbox[4], hasLength(1));
+        expect(
+          utf8.decode(h.inbox[4].single.plaintext),
+          'hello across four hops',
+        );
+        expect(h.inbox[4].single.senderId, h.nodes[0].peerId);
+        for (final relay in [0, 1, 2, 3]) {
+          expect(
+            h.inbox[relay],
+            isEmpty,
+            reason: 'node $relay must not receive it',
+          );
+        }
+      },
+    );
 
     test('a second message reuses the session: no new handshake', () async {
       final h = await _Harness.build(5, line);
@@ -85,7 +100,10 @@ void main() {
       await pumpEventQueue();
 
       expect(h.handshakeFrames(), handshakesAfterFirst);
-      expect(h.inbox[4].map((m) => utf8.decode(m.plaintext)), ['first', 'second']);
+      expect(h.inbox[4].map((m) => utf8.decode(m.plaintext)), [
+        'first',
+        'second',
+      ]);
     });
 
     test('relays see only ciphertext, never the plaintext', () async {
@@ -107,7 +125,11 @@ void main() {
       await h.nodes[0].sendText(h.nodes[4].peerId, _utf8('established'));
       await pumpEventQueue();
 
-      await h.nodes[0].sendText(h.nodes[4].peerId, _utf8('short-lived'), ttl: 2);
+      await h.nodes[0].sendText(
+        h.nodes[4].peerId,
+        _utf8('short-lived'),
+        ttl: 2,
+      );
       await pumpEventQueue();
 
       expect(h.inbox[4].map((m) => utf8.decode(m.plaintext)), ['established']);
@@ -126,17 +148,20 @@ void main() {
   });
 
   group('MeshNode simultaneous first contact', () {
-    test('two nodes that message each other at once both receive exactly one message', () async {
-      final h = await _Harness.build(2, const [(0, 1)]);
+    test(
+      'two nodes that message each other at once both receive exactly one message',
+      () async {
+        final h = await _Harness.build(2, const [(0, 1)]);
 
-      await Future.wait([
-        h.nodes[0].sendText(h.nodes[1].peerId, _utf8('from zero')),
-        h.nodes[1].sendText(h.nodes[0].peerId, _utf8('from one')),
-      ]);
-      await pumpEventQueue();
+        await Future.wait([
+          h.nodes[0].sendText(h.nodes[1].peerId, _utf8('from zero')),
+          h.nodes[1].sendText(h.nodes[0].peerId, _utf8('from one')),
+        ]);
+        await pumpEventQueue();
 
-      expect(h.inbox[1].map((m) => utf8.decode(m.plaintext)), ['from zero']);
-      expect(h.inbox[0].map((m) => utf8.decode(m.plaintext)), ['from one']);
-    });
+        expect(h.inbox[1].map((m) => utf8.decode(m.plaintext)), ['from zero']);
+        expect(h.inbox[0].map((m) => utf8.decode(m.plaintext)), ['from one']);
+      },
+    );
   });
 }

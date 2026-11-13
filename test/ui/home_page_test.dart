@@ -19,14 +19,22 @@ void main() {
       random: Random(1),
       delay: (_) async {},
     );
-    final controller = ChatController(node: node, lan: LanManager(node: node, beaconPort: 0));
+    final controller = ChatController(
+      node: node,
+      lan: LanManager(node: node, beaconPort: 0),
+    );
 
-    await tester.pumpWidget(MaterialApp(home: HomePage(controller: controller)));
+    await tester.pumpWidget(
+      MaterialApp(home: HomePage(controller: controller)),
+    );
 
     expect(find.text('My ID'), findsOneWidget);
     expect(find.text(controller.myId), findsOneWidget);
 
-    await tester.enterText(find.byKey(const Key('contact-id-field')), _contactId);
+    await tester.enterText(
+      find.byKey(const Key('contact-id-field')),
+      _contactId,
+    );
     await tester.tap(find.byKey(const Key('add-contact-button')));
     await tester.pump();
 

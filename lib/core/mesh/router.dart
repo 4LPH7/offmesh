@@ -25,11 +25,11 @@ class MeshRouter {
     Random? random,
     Pause? delay,
     DateTime Function()? clock,
-  })  : _transports = List.of(transports),
-        _onDeliver = onDeliver,
-        _seen = seenCache ?? SeenCache(clock: clock ?? DateTime.now),
-        _random = random ?? Random.secure(),
-        _delay = delay ?? Future<void>.delayed;
+  }) : _transports = List.of(transports),
+       _onDeliver = onDeliver,
+       _seen = seenCache ?? SeenCache(clock: clock ?? DateTime.now),
+       _random = random ?? Random.secure(),
+       _delay = delay ?? Future<void>.delayed;
 
   final Uint8List localId;
   final List<MeshTransport> _transports;
@@ -69,8 +69,9 @@ class MeshRouter {
   }
 
   void _attach(MeshTransport transport) {
-    _subscriptions[transport] =
-        transport.incoming.listen((frame) => _onFrame(transport, frame));
+    _subscriptions[transport] = transport.incoming.listen(
+      (frame) => _onFrame(transport, frame),
+    );
   }
 
   /// Sends a packet this node created. It is recorded as seen first so the echo is dropped.
@@ -88,17 +89,24 @@ class MeshRouter {
     }
     if (_seen.isDuplicate(packet)) return;
 
-    final addressedHere = packet.isBroadcast || _sameId(packet.recipientId, localId);
+    final addressedHere =
+        packet.isBroadcast || _sameId(packet.recipientId, localId);
     if (addressedHere) _onDeliver(packet);
 
     final stillNeeded = packet.isBroadcast || !addressedHere;
     if (!stillNeeded || packet.ttl <= 1) return;
 
     await _delay(_relayJitter());
-    await _sendEverywhere(_withTtl(packet, packet.ttl - 1).encode(), except: from);
+    await _sendEverywhere(
+      _withTtl(packet, packet.ttl - 1).encode(),
+      except: from,
+    );
   }
 
-  Future<void> _sendEverywhere(Uint8List frame, {required MeshTransport? except}) async {
+  Future<void> _sendEverywhere(
+    Uint8List frame, {
+    required MeshTransport? except,
+  }) async {
     await Future.wait([
       for (final transport in List.of(_transports))
         if (!identical(transport, except)) transport.send(frame),
@@ -111,15 +119,15 @@ class MeshRouter {
   }
 
   static Packet _withTtl(Packet packet, int ttl) => Packet(
-        type: packet.type,
-        ttl: ttl,
-        packetId: packet.packetId,
-        senderId: packet.senderId,
-        recipientId: packet.recipientId,
-        fragIdx: packet.fragIdx,
-        fragTotal: packet.fragTotal,
-        payload: packet.payload,
-      );
+    type: packet.type,
+    ttl: ttl,
+    packetId: packet.packetId,
+    senderId: packet.senderId,
+    recipientId: packet.recipientId,
+    fragIdx: packet.fragIdx,
+    fragTotal: packet.fragTotal,
+    payload: packet.payload,
+  );
 
   static bool _sameId(List<int> a, List<int> b) {
     if (a.length != b.length) return false;

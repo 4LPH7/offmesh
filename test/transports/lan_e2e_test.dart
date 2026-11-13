@@ -40,40 +40,49 @@ Future<void> _waitFor(bool Function() condition) async {
 }
 
 void main() {
-  test('two devices on loopback exchange an encrypted message over a LAN link', () async {
-    final alice = await _device();
-    final bob = await _device();
-    final port = await bob.lan.start();
-    addTearDown(() async {
-      await alice.lan.stop();
-      await bob.lan.stop();
-    });
+  test(
+    'two devices on loopback exchange an encrypted message over a LAN link',
+    () async {
+      final alice = await _device();
+      final bob = await _device();
+      final port = await bob.lan.start();
+      addTearDown(() async {
+        await alice.lan.stop();
+        await bob.lan.stop();
+      });
 
-    await alice.lan.connect('127.0.0.1', port);
-    await alice.node.sendText(bob.node.peerId, Uint8List.fromList(utf8.encode('over the LAN')));
+      await alice.lan.connect('127.0.0.1', port);
+      await alice.node.sendText(
+        bob.node.peerId,
+        Uint8List.fromList(utf8.encode('over the LAN')),
+      );
 
-    await _waitFor(() => bob.inbox.isNotEmpty);
-    expect(utf8.decode(bob.inbox.single.plaintext), 'over the LAN');
-    expect(bob.inbox.single.senderId, alice.node.peerId);
-  });
+      await _waitFor(() => bob.inbox.isNotEmpty);
+      expect(utf8.decode(bob.inbox.single.plaintext), 'over the LAN');
+      expect(bob.inbox.single.senderId, alice.node.peerId);
+    },
+  );
 
-  test('a second connection to the same peer is closed, leaving one link', () async {
-    final alice = await _device();
-    final bob = await _device();
-    final port = await bob.lan.start();
-    addTearDown(() async {
-      await alice.lan.stop();
-      await bob.lan.stop();
-    });
+  test(
+    'a second connection to the same peer is closed, leaving one link',
+    () async {
+      final alice = await _device();
+      final bob = await _device();
+      final port = await bob.lan.start();
+      addTearDown(() async {
+        await alice.lan.stop();
+        await bob.lan.stop();
+      });
 
-    await alice.lan.connect('127.0.0.1', port);
-    await _waitFor(() => alice.lan.linkCount == 1 && bob.lan.linkCount == 1);
-    await alice.lan.connect('127.0.0.1', port);
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+      await alice.lan.connect('127.0.0.1', port);
+      await _waitFor(() => alice.lan.linkCount == 1 && bob.lan.linkCount == 1);
+      await alice.lan.connect('127.0.0.1', port);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
 
-    expect(alice.lan.linkCount, 1);
-    expect(bob.lan.linkCount, 1);
-  });
+      expect(alice.lan.linkCount, 1);
+      expect(bob.lan.linkCount, 1);
+    },
+  );
 
   test('a device does not link to itself', () async {
     final alice = await _device();

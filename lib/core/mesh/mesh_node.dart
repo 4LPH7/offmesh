@@ -18,7 +18,8 @@ const int maxPendingHandshakes = 32;
 const int maxQueuedPerPeer = 64;
 
 const int _handshakeOneLength = 32; // e
-const int _handshakeTwoMinLength = 96; // e, encrypted s, encrypted empty payload
+const int _handshakeTwoMinLength =
+    96; // e, encrypted s, encrypted empty payload
 
 class ReceivedMessage {
   const ReceivedMessage({required this.senderId, required this.plaintext});
@@ -50,8 +51,8 @@ class MeshNode {
     Pause? delay,
     DateTime Function()? clock,
     void Function(Object error, StackTrace stack)? onError,
-  })  : _random = random ?? Random.secure(),
-        _onError = onError {
+  }) : _random = random ?? Random.secure(),
+       _onError = onError {
     _router = MeshRouter(
       localId: identity.peerId,
       transports: transports,
@@ -68,7 +69,8 @@ class MeshNode {
   late final MeshRouter _router;
   Future<void> _inbound = Future<void>.value();
 
-  final StreamController<ReceivedMessage> _inbox = StreamController<ReceivedMessage>.broadcast();
+  final StreamController<ReceivedMessage> _inbox =
+      StreamController<ReceivedMessage>.broadcast();
   final Map<String, NoiseSession> _sessions = {};
   final Map<String, NoiseHandshake> _initiators = {};
   final Map<String, NoiseHandshake> _responders = {};
@@ -85,10 +87,15 @@ class MeshNode {
 
   void addTransport(MeshTransport transport) => _router.addTransport(transport);
 
-  Future<void> removeTransport(MeshTransport transport) => _router.removeTransport(transport);
+  Future<void> removeTransport(MeshTransport transport) =>
+      _router.removeTransport(transport);
 
   /// Sends [plaintext] to [peerId], handshaking first if there is no session yet.
-  Future<void> sendText(Uint8List peerId, Uint8List plaintext, {int ttl = maxTtl}) async {
+  Future<void> sendText(
+    Uint8List peerId,
+    Uint8List plaintext, {
+    int ttl = maxTtl,
+  }) async {
     final key = peerId.hex;
     final session = _sessions[key];
     if (session != null) {
@@ -110,7 +117,9 @@ class MeshNode {
   void _onPacket(Packet packet) {
     _inbound = _inbound
         .then((_) => _handle(packet))
-        .catchError((Object error, StackTrace stack) => _onError?.call(error, stack));
+        .catchError(
+          (Object error, StackTrace stack) => _onError?.call(error, stack),
+        );
   }
 
   Future<void> _handle(Packet packet) async {
@@ -229,7 +238,9 @@ class MeshNode {
     final session = _sessions[packet.senderId.hex];
     if (session == null) return;
     final plaintext = await session.decrypt(complete);
-    _inbox.add(ReceivedMessage(senderId: packet.senderId, plaintext: plaintext));
+    _inbox.add(
+      ReceivedMessage(senderId: packet.senderId, plaintext: plaintext),
+    );
   }
 
   Future<void> _flush(Uint8List peerId) async {
@@ -262,16 +273,18 @@ class MeshNode {
   }
 
   Future<void> _sendHandshake(Uint8List recipient, Uint8List payload) {
-    return _router.originate(Packet(
-      type: PacketType.noiseHandshake,
-      ttl: maxTtl,
-      packetId: _nextPacketId(),
-      senderId: identity.peerId,
-      recipientId: recipient,
-      fragIdx: 0,
-      fragTotal: 1,
-      payload: payload,
-    ));
+    return _router.originate(
+      Packet(
+        type: PacketType.noiseHandshake,
+        ttl: maxTtl,
+        packetId: _nextPacketId(),
+        senderId: identity.peerId,
+        recipientId: recipient,
+        fragIdx: 0,
+        fragTotal: 1,
+        payload: payload,
+      ),
+    );
   }
 
   int _nextPacketId() => _random.nextInt(0x100000000);

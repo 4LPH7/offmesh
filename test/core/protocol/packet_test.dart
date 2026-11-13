@@ -64,28 +64,19 @@ void main() {
     test('unknown protocol version', () {
       final bytes = _sample().encode()..[0] = 0x09;
 
-      expect(
-        () => Packet.decode(bytes),
-        throwsA(isA<PacketFormatException>()),
-      );
+      expect(() => Packet.decode(bytes), throwsA(isA<PacketFormatException>()));
     });
 
     test('unknown packet type', () {
       final bytes = _sample().encode()..[1] = 0x7F;
 
-      expect(
-        () => Packet.decode(bytes),
-        throwsA(isA<PacketFormatException>()),
-      );
+      expect(() => Packet.decode(bytes), throwsA(isA<PacketFormatException>()));
     });
 
     test('TTL above the maximum of 7', () {
       final bytes = _sample().encode()..[2] = 8;
 
-      expect(
-        () => Packet.decode(bytes),
-        throwsA(isA<PacketFormatException>()),
-      );
+      expect(() => Packet.decode(bytes), throwsA(isA<PacketFormatException>()));
     });
 
     test('declared length disagrees with actual bytes', () {
@@ -105,37 +96,25 @@ void main() {
         ..[2] = 1
         ..[25] = 221;
 
-      expect(
-        () => Packet.decode(bytes),
-        throwsA(isA<PacketFormatException>()),
-      );
+      expect(() => Packet.decode(bytes), throwsA(isA<PacketFormatException>()));
     });
 
     test('zero fragment total is rejected', () {
       final bytes = _sample().encode()..[24] = 0;
 
-      expect(
-        () => Packet.decode(bytes),
-        throwsA(isA<PacketFormatException>()),
-      );
+      expect(() => Packet.decode(bytes), throwsA(isA<PacketFormatException>()));
     });
 
     test('fragment index at or past the total is rejected', () {
       final bytes = _sample(fragTotal: 2, fragIdx: 0).encode()..[23] = 2;
 
-      expect(
-        () => Packet.decode(bytes),
-        throwsA(isA<PacketFormatException>()),
-      );
+      expect(() => Packet.decode(bytes), throwsA(isA<PacketFormatException>()));
     });
   });
 
   group('Packet construction', () {
     test('rejects a payload over 220 bytes', () {
-      expect(
-        () => _sample(payload: List.filled(221, 0)),
-        throwsArgumentError,
-      );
+      expect(() => _sample(payload: List.filled(221, 0)), throwsArgumentError);
     });
 
     test('a broadcast recipient is all 0xFF', () {

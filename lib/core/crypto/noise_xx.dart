@@ -34,7 +34,10 @@ Future<Uint8List> _hmac(List<int> key, List<int> data) async {
 }
 
 /// Noise HKDF with two outputs (HMAC-based, as the spec defines it).
-Future<(Uint8List, Uint8List)> _hkdf2(List<int> chainingKey, List<int> inputKeyMaterial) async {
+Future<(Uint8List, Uint8List)> _hkdf2(
+  List<int> chainingKey,
+  List<int> inputKeyMaterial,
+) async {
   final temp = await _hmac(chainingKey, inputKeyMaterial);
   final out1 = await _hmac(temp, const [0x01]);
   final out2 = await _hmac(temp, [...out1, 0x02]);
@@ -55,7 +58,10 @@ class _CipherState {
   final SecretKey? _key;
   int _nonce = 0;
 
-  Future<Uint8List> encrypt(List<int> associatedData, List<int> plaintext) async {
+  Future<Uint8List> encrypt(
+    List<int> associatedData,
+    List<int> plaintext,
+  ) async {
     final key = _key;
     if (key == null) return Uint8List.fromList(plaintext);
     final box = await _aead.encrypt(
@@ -67,7 +73,10 @@ class _CipherState {
     return Uint8List.fromList([...box.cipherText, ...box.mac.bytes]);
   }
 
-  Future<Uint8List> decrypt(List<int> associatedData, List<int> ciphertext) async {
+  Future<Uint8List> decrypt(
+    List<int> associatedData,
+    List<int> ciphertext,
+  ) async {
     final key = _key;
     if (key == null) return Uint8List.fromList(ciphertext);
     if (ciphertext.length < _tagLength) {
@@ -108,7 +117,10 @@ class _SymmetricState {
   static Future<_SymmetricState> start() async {
     final name = utf8.encode(noiseProtocolName);
     final hash = name.length <= _keyLength
-        ? Uint8List.fromList([...name, ...List.filled(_keyLength - name.length, 0)])
+        ? Uint8List.fromList([
+            ...name,
+            ...List.filled(_keyLength - name.length, 0),
+          ])
         : await _sha256(name);
     return _SymmetricState._(hash, Uint8List.fromList(hash));
   }
@@ -154,17 +166,19 @@ class NoiseSession {
     required _CipherState receive,
     required this.handshakeHash,
     required this.remoteStaticPublicKey,
-  })  : _send = send,
-        _receive = receive;
+  }) : _send = send,
+       _receive = receive;
 
   final _CipherState _send;
   final _CipherState _receive;
   final Uint8List handshakeHash;
   final Uint8List remoteStaticPublicKey;
 
-  Future<Uint8List> encrypt(List<int> plaintext) => _send.encrypt(const [], plaintext);
+  Future<Uint8List> encrypt(List<int> plaintext) =>
+      _send.encrypt(const [], plaintext);
 
-  Future<Uint8List> decrypt(List<int> ciphertext) => _receive.decrypt(const [], ciphertext);
+  Future<Uint8List> decrypt(List<int> ciphertext) =>
+      _receive.decrypt(const [], ciphertext);
 }
 
 enum _Role { initiator, responder }
@@ -182,12 +196,12 @@ class NoiseHandshake {
     required SimpleKeyPair? ephemeralKeyPair,
     required _SymmetricState symmetric,
     required Uint8List? expectedResponderPeerId,
-  })  : _role = role,
-        _staticKeyPair = staticKeyPair,
-        _staticPublicKey = staticPublicKey,
-        _ephemeralKeyPair = ephemeralKeyPair,
-        _symmetric = symmetric,
-        _expectedResponderPeerId = expectedResponderPeerId;
+  }) : _role = role,
+       _staticKeyPair = staticKeyPair,
+       _staticPublicKey = staticPublicKey,
+       _ephemeralKeyPair = ephemeralKeyPair,
+       _symmetric = symmetric,
+       _expectedResponderPeerId = expectedResponderPeerId;
 
   final _Role _role;
   final SimpleKeyPair _staticKeyPair;
@@ -242,7 +256,9 @@ class NoiseHandshake {
   }) async {
     final symmetric = await _SymmetricState.start();
     await symmetric.mixHash(prologue);
-    final publicKey = Uint8List.fromList((await staticKeyPair.extractPublicKey()).bytes);
+    final publicKey = Uint8List.fromList(
+      (await staticKeyPair.extractPublicKey()).bytes,
+    );
     return NoiseHandshake._(
       role: role,
       staticKeyPair: staticKeyPair,
@@ -312,10 +328,16 @@ class NoiseHandshake {
     final ephemeralPublic = await _publicKeyOf(ephemeral);
     await _symmetric.mixHash(ephemeralPublic);
     await _symmetric.mixKey(await _dh(ephemeral, _remoteEphemeral!)); // ee
-    final encryptedStatic = await _symmetric.encryptAndHash(_staticPublicKey); // s
+    final encryptedStatic = await _symmetric.encryptAndHash(
+      _staticPublicKey,
+    ); // s
     await _symmetric.mixKey(await _dh(_staticKeyPair, _remoteEphemeral!)); // es
     final encryptedPayload = await _symmetric.encryptAndHash(payload);
-    return Uint8List.fromList([...ephemeralPublic, ...encryptedStatic, ...encryptedPayload]);
+    return Uint8List.fromList([
+      ...ephemeralPublic,
+      ...encryptedStatic,
+      ...encryptedPayload,
+    ]);
   }
 
   Future<Uint8List> _readMessage2(Uint8List message) async {
@@ -330,11 +352,15 @@ class NoiseHandshake {
     _remoteStatic = remoteStatic;
     await _checkResponderPeerId(remoteStatic);
     await _symmetric.mixKey(await _dh(ephemeral, remoteStatic)); // es
-    return _symmetric.decryptAndHash(message.sublist(_keyLength + _encryptedStaticLength));
+    return _symmetric.decryptAndHash(
+      message.sublist(_keyLength + _encryptedStaticLength),
+    );
   }
 
   Future<Uint8List> _writeMessage3(Uint8List payload) async {
-    final encryptedStatic = await _symmetric.encryptAndHash(_staticPublicKey); // s
+    final encryptedStatic = await _symmetric.encryptAndHash(
+      _staticPublicKey,
+    ); // s
     await _symmetric.mixKey(await _dh(_staticKeyPair, _remoteEphemeral!)); // se
     final encryptedPayload = await _symmetric.encryptAndHash(payload);
     await _finishHandshake();
@@ -347,8 +373,12 @@ class NoiseHandshake {
       message.sublist(0, _encryptedStaticLength),
     );
     _remoteStatic = remoteStatic;
-    await _symmetric.mixKey(await _dh(_ensureEphemeralSync(), remoteStatic)); // se
-    final payload = await _symmetric.decryptAndHash(message.sublist(_encryptedStaticLength));
+    await _symmetric.mixKey(
+      await _dh(_ensureEphemeralSync(), remoteStatic),
+    ); // se
+    final payload = await _symmetric.decryptAndHash(
+      message.sublist(_encryptedStaticLength),
+    );
     await _finishHandshake();
     return payload;
   }
@@ -369,7 +399,9 @@ class NoiseHandshake {
     if (expected == null) return;
     final actual = await peerIdFor(responderStatic);
     if (!_bytesEqual(actual, expected)) {
-      throw const NoiseException('responder identity does not match the dialled PeerID');
+      throw const NoiseException(
+        'responder identity does not match the dialled PeerID',
+      );
     }
   }
 
@@ -393,7 +425,10 @@ class NoiseHandshake {
   Future<Uint8List> _dh(SimpleKeyPair local, List<int> remotePublicKey) async {
     final secret = await X25519().sharedSecretKey(
       keyPair: local,
-      remotePublicKey: SimplePublicKey(remotePublicKey, type: KeyPairType.x25519),
+      remotePublicKey: SimplePublicKey(
+        remotePublicKey,
+        type: KeyPairType.x25519,
+      ),
     );
     return Uint8List.fromList(await secret.extractBytes());
   }

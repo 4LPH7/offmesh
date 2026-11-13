@@ -15,7 +15,10 @@ Future<ChatController> _controller() async {
     random: Random(),
     delay: (_) async {},
   );
-  return ChatController(node: node, lan: LanManager(node: node, beaconPort: 0));
+  return ChatController(
+    node: node,
+    lan: LanManager(node: node, beaconPort: 0),
+  );
 }
 
 Uint8List _id(int fill) => Uint8List.fromList(List.filled(8, fill));
@@ -39,10 +42,12 @@ void main() {
   test('an incoming message opens a thread for its sender', () async {
     final controller = await _controller();
 
-    controller.handleIncoming(ReceivedMessage(
-      senderId: _id(0x33),
-      plaintext: Uint8List.fromList(utf8.encode('hi there')),
-    ));
+    controller.handleIncoming(
+      ReceivedMessage(
+        senderId: _id(0x33),
+        plaintext: Uint8List.fromList(utf8.encode('hi there')),
+      ),
+    );
 
     final sender = _hex(_id(0x33));
     expect(controller.thread(sender).single.outgoing, isFalse);

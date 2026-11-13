@@ -14,6 +14,16 @@ Based on the "Decentralized Offline Voice and Mesh Communication" whitepaper, Ti
   manual IP:port connect.
 - A single screen: my ID, connect, add contact by ID, chat.
 
+## Architecture & Module Organization
+
+OffMesh is structured into decoupled core layers:
+
+- **Crypto (`lib/core/crypto/`)**: Noise XX (`Noise_XX_25519_ChaChaPoly_SHA256`) state machine and static key management with mutual authentication.
+- **Protocol (`lib/core/protocol/`)**: 26-byte binary packet header codec, message fragmentation / reassembly (up to ~56 KB payload), and seen cache for flood deduplication.
+- **Mesh (`lib/core/mesh/`)**: Mesh router implementing TTL-bounded flooding, relay jitter, loop suppression, and per-peer transmission queues.
+- **Transports (`lib/transports/`)**: Length-prefixed TCP socket framing, UDP beacon broadcast discovery on port 47999, and connection lifecycle management.
+- **App & UI (`lib/app/`, `lib/ui/`)**: State controllers, contact threading, and responsive Flutter interface.
+
 ## Not in v0.1
 
 - Bluetooth mesh (Tier 2 radio). The router is ready for it; no BLE transport yet.

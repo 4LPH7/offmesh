@@ -10,7 +10,11 @@ const int _maxFragmentsPerMessage = 255;
 class Fragmenter {
   Fragmenter({this.maxPayload = maxPayloadLength}) {
     if (maxPayload < 1 || maxPayload > maxPayloadLength) {
-      throw ArgumentError.value(maxPayload, 'maxPayload', 'must be 1..$maxPayloadLength');
+      throw ArgumentError.value(
+        maxPayload,
+        'maxPayload',
+        'must be 1..$maxPayloadLength',
+      );
     }
   }
 
@@ -25,9 +29,13 @@ class Fragmenter {
     required Uint8List recipientId,
     required Uint8List data,
   }) {
-    final count = data.isEmpty ? 1 : (data.length + maxPayload - 1) ~/ maxPayload;
+    final count = data.isEmpty
+        ? 1
+        : (data.length + maxPayload - 1) ~/ maxPayload;
     if (count > _maxFragmentsPerMessage) {
-      throw ArgumentError('payload needs $count fragments; the limit is $_maxFragmentsPerMessage');
+      throw ArgumentError(
+        'payload needs $count fragments; the limit is $_maxFragmentsPerMessage',
+      );
     }
     return List.generate(count, (index) {
       final start = index * maxPayload;
@@ -47,7 +55,8 @@ class Fragmenter {
 }
 
 class _PartialMessage {
-  _PartialMessage(this.fragTotal) : parts = List<Uint8List?>.filled(fragTotal, null);
+  _PartialMessage(this.fragTotal)
+    : parts = List<Uint8List?>.filled(fragTotal, null);
 
   final int fragTotal;
   final List<Uint8List?> parts;

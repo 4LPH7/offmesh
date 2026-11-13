@@ -27,7 +27,9 @@ class Identity {
   }
 
   static Future<Identity> fromKeyPair(SimpleKeyPair keyPair) async {
-    final publicKey = Uint8List.fromList((await keyPair.extractPublicKey()).bytes);
+    final publicKey = Uint8List.fromList(
+      (await keyPair.extractPublicKey()).bytes,
+    );
     return Identity._(
       keyPair: keyPair,
       publicKey: publicKey,

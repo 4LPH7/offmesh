@@ -1,5 +1,7 @@
 name: offmesh
-description: "A new Flutter project."
+description: "Offline, end-to-end encrypted messaging over phone-to-phone links using Noise XX and mesh flood routing."
+homepage: https://github.com/4LPH7/offmesh
+repository: https://github.com/4LPH7/offmesh
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev

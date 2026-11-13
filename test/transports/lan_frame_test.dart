@@ -52,7 +52,8 @@ void main() {
 
   test('a declared length over the limit is rejected before buffering it', () {
     final decoder = FrameDecoder();
-    final header = Uint8List(2)..buffer.asByteData().setUint16(0, maxFrameLength + 1);
+    final header = Uint8List(2)
+      ..buffer.asByteData().setUint16(0, maxFrameLength + 1);
 
     expect(() => decoder.add(header), throwsFormatException);
   });

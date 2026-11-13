@@ -29,7 +29,8 @@ class FakeEndpoint implements MeshTransport {
 
 /// Nodes numbered 0..n-1 joined by point-to-point links given as (a, b) pairs.
 class FakeTopology {
-  FakeTopology(int nodeCount, List<(int, int)> edges) : network = FakeNetwork() {
+  FakeTopology(int nodeCount, List<(int, int)> edges)
+    : network = FakeNetwork() {
     _endpoints = List.generate(nodeCount, (_) => <FakeEndpoint>[]);
     for (final (a, b) in edges) {
       final endA = FakeEndpoint(network);

@@ -80,10 +80,12 @@ class LanManager {
     }
     _links[key] = link;
     node.addTransport(link);
-    unawaited(link.closed.then((_) async {
-      _links.remove(key);
-      await node.removeTransport(link);
-    }));
+    unawaited(
+      link.closed.then((_) async {
+        _links.remove(key);
+        await node.removeTransport(link);
+      }),
+    );
   }
 
   Future<void> _startBeacons() async {
@@ -122,9 +124,12 @@ class LanManager {
     final host = datagram.address.address;
     final dialKey = '$host:$port';
     if (!_dialing.add(dialKey)) return;
-    unawaited(connect(host, port)
-        .catchError((Object _) {})
-        .whenComplete(() => _dialing.remove(dialKey)));
+    unawaited(
+      connect(
+        host,
+        port,
+      ).catchError((Object _) {}).whenComplete(() => _dialing.remove(dialKey)),
+    );
   }
 
   static String _hex(Uint8List bytes) =>

@@ -9,7 +9,12 @@ Uint8List _bytes(int length, {int seed = 0}) =>
 
 Uint8List _id(int fill) => Uint8List.fromList(List.filled(8, fill));
 
-List<Packet> _split(Uint8List data, {int maxPayload = 220, int packetId = 1, int fill = 0x11}) {
+List<Packet> _split(
+  Uint8List data, {
+  int maxPayload = 220,
+  int packetId = 1,
+  int fill = 0x11,
+}) {
   return Fragmenter(maxPayload: maxPayload).fragment(
     type: PacketType.noiseTransport,
     ttl: 7,
@@ -51,10 +56,7 @@ void main() {
     });
 
     test('rejects a payload that needs more than 255 fragments', () {
-      expect(
-        () => _split(_bytes(220 * 255 + 1)),
-        throwsArgumentError,
-      );
+      expect(() => _split(_bytes(220 * 255 + 1)), throwsArgumentError);
     });
 
     test('rejects a max payload outside 1..220', () {

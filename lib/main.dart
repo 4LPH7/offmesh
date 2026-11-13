@@ -16,7 +16,10 @@ Future<void> main() async {
     transports: const [],
     random: Random.secure(),
   );
-  final controller = ChatController(node: node, lan: LanManager(node: node));
+  final controller = ChatController(
+    node: node,
+    lan: LanManager(node: node),
+  );
   await controller.start();
   runApp(OffMeshApp(controller: controller));
 }

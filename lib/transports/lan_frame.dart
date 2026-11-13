@@ -9,7 +9,11 @@ const int _headerLength = 2;
 /// Prefixes [body] with its length as a 2-byte big-endian integer.
 Uint8List encodeFrame(Uint8List body) {
   if (body.length > maxFrameLength) {
-    throw ArgumentError.value(body.length, 'body', 'exceeds $maxFrameLength bytes');
+    throw ArgumentError.value(
+      body.length,
+      'body',
+      'exceeds $maxFrameLength bytes',
+    );
   }
   final out = Uint8List(_headerLength + body.length);
   out.buffer.asByteData().setUint16(0, body.length, Endian.big);
@@ -31,7 +35,11 @@ class FrameDecoder {
         throw const FormatException('frame length exceeds the limit');
       }
       if (_buffer.length < _headerLength + length) break;
-      frames.add(Uint8List.fromList(_buffer.sublist(_headerLength, _headerLength + length)));
+      frames.add(
+        Uint8List.fromList(
+          _buffer.sublist(_headerLength, _headerLength + length),
+        ),
+      );
       _buffer.removeRange(0, _headerLength + length);
     }
     return frames;

@@ -68,24 +68,30 @@ void main() {
 
   tearDown(() => router.stop());
 
-  test('delivers a packet addressed to this node and does not relay it', () async {
-    source.receive(_frame(recipient: _me));
-    await _settle();
+  test(
+    'delivers a packet addressed to this node and does not relay it',
+    () async {
+      source.receive(_frame(recipient: _me));
+      await _settle();
 
-    expect(delivered, hasLength(1));
-    expect(source.sent, isEmpty);
-    expect(other.sent, isEmpty);
-  });
+      expect(delivered, hasLength(1));
+      expect(source.sent, isEmpty);
+      expect(other.sent, isEmpty);
+    },
+  );
 
-  test('relays a packet for someone else with TTL decremented, never back to its source', () async {
-    source.receive(_frame(recipient: _other, ttl: 5));
-    await _settle();
+  test(
+    'relays a packet for someone else with TTL decremented, never back to its source',
+    () async {
+      source.receive(_frame(recipient: _other, ttl: 5));
+      await _settle();
 
-    expect(delivered, isEmpty);
-    expect(source.sent, isEmpty);
-    expect(other.sent, hasLength(1));
-    expect(Packet.decode(other.sent.single).ttl, 4);
-  });
+      expect(delivered, isEmpty);
+      expect(source.sent, isEmpty);
+      expect(other.sent, hasLength(1));
+      expect(Packet.decode(other.sent.single).ttl, 4);
+    },
+  );
 
   test('a packet with TTL 1 is not relayed further', () async {
     source.receive(_frame(recipient: _other, ttl: 1));
@@ -114,18 +120,25 @@ void main() {
     expect(other.sent, hasLength(1));
   });
 
-  test('a packet this node originated is not delivered back when it echoes', () async {
-    final own = Packet.decode(_frame(recipient: Packet.broadcastId, sender: _me, ttl: 7));
-    await router.originate(own);
-    source.receive(other.sent.single);
-    await _settle();
+  test(
+    'a packet this node originated is not delivered back when it echoes',
+    () async {
+      final own = Packet.decode(
+        _frame(recipient: Packet.broadcastId, sender: _me, ttl: 7),
+      );
+      await router.originate(own);
+      source.receive(other.sent.single);
+      await _settle();
 
-    expect(delivered, isEmpty);
-    expect(other.sent, hasLength(1));
-  });
+      expect(delivered, isEmpty);
+      expect(other.sent, hasLength(1));
+    },
+  );
 
   test('originate sends on every transport', () async {
-    await router.originate(Packet.decode(_frame(recipient: _other, sender: _me, ttl: 7)));
+    await router.originate(
+      Packet.decode(_frame(recipient: _other, sender: _me, ttl: 7)),
+    );
 
     expect(source.sent, hasLength(1));
     expect(other.sent, hasLength(1));

@@ -53,21 +53,29 @@ class Packet {
     required this.fragIdx,
     required this.fragTotal,
     required Uint8List payload,
-  })  : senderId = Uint8List.fromList(senderId),
-        recipientId = Uint8List.fromList(recipientId),
-        payload = Uint8List.fromList(payload) {
+  }) : senderId = Uint8List.fromList(senderId),
+       recipientId = Uint8List.fromList(recipientId),
+       payload = Uint8List.fromList(payload) {
     _require(ttl >= 0 && ttl <= maxTtl, 'ttl out of range');
     _require(packetId >= 0 && packetId <= 0xFFFFFFFF, 'packetId out of range');
     _require(senderId.length == _idLength, 'senderId must be 8 bytes');
     _require(recipientId.length == _idLength, 'recipientId must be 8 bytes');
     _require(fragTotal >= 1 && fragTotal <= 255, 'fragTotal must be 1..255');
-    _require(fragIdx >= 0 && fragIdx < fragTotal, 'fragIdx must be below fragTotal');
-    _require(this.payload.length <= maxPayloadLength, 'payload exceeds $maxPayloadLength bytes');
+    _require(
+      fragIdx >= 0 && fragIdx < fragTotal,
+      'fragIdx must be below fragTotal',
+    );
+    _require(
+      this.payload.length <= maxPayloadLength,
+      'payload exceeds $maxPayloadLength bytes',
+    );
   }
 
   static const int headerLength = 26;
 
-  static final Uint8List broadcastId = Uint8List.fromList(List.filled(_idLength, 0xFF));
+  static final Uint8List broadcastId = Uint8List.fromList(
+    List.filled(_idLength, 0xFF),
+  );
 
   final PacketType type;
   final int ttl;
@@ -110,7 +118,9 @@ class Packet {
     }
     final declaredLength = data.getUint8(25);
     if (bytes.length != headerLength + declaredLength) {
-      throw const PacketFormatException('length field disagrees with frame size');
+      throw const PacketFormatException(
+        'length field disagrees with frame size',
+      );
     }
     try {
       return Packet(

@@ -8,7 +8,11 @@ import '../core/protocol/packet.dart';
 import '../transports/lan_manager.dart';
 
 class ChatMessage {
-  const ChatMessage({required this.outgoing, required this.text, required this.at});
+  const ChatMessage({
+    required this.outgoing,
+    required this.text,
+    required this.at,
+  });
 
   final bool outgoing;
   final String text;
@@ -17,8 +21,11 @@ class ChatMessage {
 
 /// App state: contacts, one thread per contact, and the node that carries the messages.
 class ChatController extends ChangeNotifier {
-  ChatController({required this.node, required this.lan, DateTime Function()? clock})
-      : _clock = clock ?? DateTime.now;
+  ChatController({
+    required this.node,
+    required this.lan,
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now;
 
   final MeshNode node;
   final LanManager lan;
@@ -43,7 +50,8 @@ class ChatController extends ChangeNotifier {
 
   Set<String> get linkedNeighbours => lan.linkedPeerIds;
 
-  List<ChatMessage> thread(String contactId) => List.unmodifiable(_threads[contactId] ?? const []);
+  List<ChatMessage> thread(String contactId) =>
+      List.unmodifiable(_threads[contactId] ?? const []);
 
   Future<void> start() async {
     _subscription = node.messages.listen(handleIncoming);
