@@ -46,3 +46,7 @@ app.*.map.json
 
 # graphify knowledge graph (regenerated locally)
 graphify-out/
+
+# Editor/agent workspace cache
+.ecc/
+
