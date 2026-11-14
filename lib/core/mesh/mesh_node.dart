@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import '../crypto/identity.dart';
 import '../crypto/noise_xx.dart';
+import '../protocol/delivery_ack.dart';
 import '../protocol/fragmentation.dart';
 import '../protocol/packet.dart';
 import 'router.dart';
@@ -28,11 +29,20 @@ class ReceivedMessage {
   final Uint8List plaintext;
 }
 
+/// A receipt from [peerId]: the message sent with [DeliveryReceipt.packetId] arrived whole.
+class DeliveryReceiptEvent {
+  const DeliveryReceiptEvent({required this.peerId, required this.receipt});
+
+  final Uint8List peerId;
+  final DeliveryReceipt receipt;
+}
+
 class _QueuedMessage {
-  const _QueuedMessage(this.plaintext, this.ttl);
+  const _QueuedMessage(this.plaintext, this.ttl, this.packetId);
 
   final Uint8List plaintext;
   final int ttl;
+  final int packetId;
 }
 
 /// One device on the mesh: a router plus one Noise session per peer.
@@ -41,8 +51,8 @@ class _QueuedMessage {
 /// are flooded like any other packet, so peers several hops away can still connect.
 /// Relays forward ciphertext they cannot read.
 ///
-/// Known limit (v0.1): transport ciphertexts use Noise's implicit in-order nonce, so a
-/// message that arrives after a later one on the same session fails to decrypt and is dropped.
+/// Transport frames carry an explicit counter and a replay window, so lost or reordered
+/// messages still decrypt. Header type, packetId and addresses are bound to each ciphertext.
 class MeshNode {
   MeshNode({
     required this.identity,
@@ -52,6 +62,7 @@ class MeshNode {
     DateTime Function()? clock,
     void Function(Object error, StackTrace stack)? onError,
   }) : _random = random ?? Random.secure(),
+       _clock = clock ?? DateTime.now,
        _onError = onError {
     _router = MeshRouter(
       localId: identity.peerId,
@@ -65,12 +76,16 @@ class MeshNode {
 
   final Identity identity;
   final Random _random;
+  final DateTime Function() _clock;
   final void Function(Object error, StackTrace stack)? _onError;
   late final MeshRouter _router;
   Future<void> _inbound = Future<void>.value();
+  Future<void> _outbound = Future<void>.value();
 
   final StreamController<ReceivedMessage> _inbox =
       StreamController<ReceivedMessage>.broadcast();
+  final StreamController<DeliveryReceiptEvent> _receipts =
+      StreamController<DeliveryReceiptEvent>.broadcast();
   final Map<String, NoiseSession> _sessions = {};
   final Map<String, NoiseHandshake> _initiators = {};
   final Map<String, NoiseHandshake> _responders = {};
@@ -80,6 +95,13 @@ class MeshNode {
   Uint8List get peerId => identity.peerId;
 
   Stream<ReceivedMessage> get messages => _inbox.stream;
+
+  /// Receipts for messages this node sent; match them to the ID [sendText] returned.
+  Stream<DeliveryReceiptEvent> get receipts => _receipts.stream;
+
+  int get relaysSent => _router.relaysSent;
+
+  int get relaysSuppressed => _router.relaysSuppressed;
 
   void start() => _router.start();
 
@@ -91,25 +113,29 @@ class MeshNode {
       _router.removeTransport(transport);
 
   /// Sends [plaintext] to [peerId], handshaking first if there is no session yet.
-  Future<void> sendText(
+  ///
+  /// Returns the message's packet ID; a [receipts] event with the same ID confirms delivery.
+  Future<int> sendText(
     Uint8List peerId,
     Uint8List plaintext, {
     int ttl = maxTtl,
   }) async {
     final key = peerId.hex;
     final session = _sessions[key];
+    final packetId = _nextPacketId();
     if (session != null) {
-      await _sendEncrypted(peerId, session, plaintext, ttl);
-      return;
+      await _sendEncrypted(peerId, session, plaintext, ttl, packetId);
+      return packetId;
     }
     final queue = _queues.putIfAbsent(key, () => []);
     if (queue.length >= maxQueuedPerPeer) {
       throw StateError('too many messages waiting for $key');
     }
-    queue.add(_QueuedMessage(plaintext, ttl));
+    queue.add(_QueuedMessage(plaintext, ttl, packetId));
     if (!_initiators.containsKey(key) && !_responders.containsKey(key)) {
       await _startHandshake(peerId);
     }
+    return packetId;
   }
 
   /// Inbound packets are handled one at a time, so a message that follows a handshake
@@ -126,6 +152,8 @@ class MeshNode {
     try {
       if (packet.type == PacketType.noiseTransport) {
         await _onTransport(packet);
+      } else if (packet.type == PacketType.ack) {
+        await _onReceipt(packet);
       } else if (packet.type == PacketType.noiseHandshake) {
         await _onHandshake(packet);
       }
@@ -237,9 +265,39 @@ class MeshNode {
     if (complete == null) return;
     final session = _sessions[packet.senderId.hex];
     if (session == null) return;
-    final plaintext = await session.decrypt(complete);
+    final plaintext = await session.decrypt(
+      complete,
+      associatedData: _bindingData(
+        packet.type,
+        packet.packetId,
+        packet.senderId,
+        packet.recipientId,
+      ),
+    );
     _inbox.add(
       ReceivedMessage(senderId: packet.senderId, plaintext: plaintext),
+    );
+    await _sendReceipt(packet.senderId, session, packet.packetId);
+  }
+
+  /// A receipt is one Noise transport message; never answered, so acks cannot loop.
+  Future<void> _onReceipt(Packet packet) async {
+    if (packet.fragTotal != 1) return;
+    final session = _sessions[packet.senderId.hex];
+    if (session == null) return;
+    final receipt = DeliveryReceipt.decode(
+      await session.decrypt(
+        packet.payload,
+        associatedData: _bindingData(
+          packet.type,
+          packet.packetId,
+          packet.senderId,
+          packet.recipientId,
+        ),
+      ),
+    );
+    _receipts.add(
+      DeliveryReceiptEvent(peerId: packet.senderId, receipt: receipt),
     );
   }
 
@@ -248,7 +306,13 @@ class MeshNode {
     final session = _sessions[peerId.hex];
     if (queued == null || session == null) return;
     for (final message in queued) {
-      await _sendEncrypted(peerId, session, message.plaintext, message.ttl);
+      await _sendEncrypted(
+        peerId,
+        session,
+        message.plaintext,
+        message.ttl,
+        message.packetId,
+      );
     }
   }
 
@@ -257,12 +321,21 @@ class MeshNode {
     NoiseSession session,
     Uint8List plaintext,
     int ttl,
-  ) async {
-    final ciphertext = await session.encrypt(plaintext);
+    int packetId,
+  ) => _serially(() async {
+    final ciphertext = await session.encrypt(
+      plaintext,
+      associatedData: _bindingData(
+        PacketType.noiseTransport,
+        packetId,
+        identity.peerId,
+        peerId,
+      ),
+    );
     final fragments = Fragmenter().fragment(
       type: PacketType.noiseTransport,
       ttl: ttl,
-      packetId: _nextPacketId(),
+      packetId: packetId,
       senderId: identity.peerId,
       recipientId: peerId,
       data: ciphertext,
@@ -270,6 +343,47 @@ class MeshNode {
     for (final fragment in fragments) {
       await _router.originate(fragment);
     }
+  });
+
+  /// Floods the receipt rather than unicasting it on a learned route: the sender of a
+  /// route entry is not authenticated yet, so a neighbour could steer receipts away.
+  Future<void> _sendReceipt(
+    Uint8List peerId,
+    NoiseSession session,
+    int packetId,
+  ) => _serially(() async {
+    final receipt = DeliveryReceipt(packetId: packetId, receivedAt: _clock());
+    final ackId = _nextPacketId();
+    final payload = await session.encrypt(
+      receipt.encode(),
+      associatedData: _bindingData(
+        PacketType.ack,
+        ackId,
+        identity.peerId,
+        peerId,
+      ),
+    );
+    await _router.originate(
+      Packet(
+        type: PacketType.ack,
+        ttl: maxTtl,
+        packetId: ackId,
+        senderId: identity.peerId,
+        recipientId: peerId,
+        fragIdx: 0,
+        fragTotal: 1,
+        payload: payload,
+      ),
+    );
+  });
+
+  /// Runs encrypt-and-send jobs one at a time so the fragments of a message leave in order.
+  /// Decryption does not depend on that order: each frame carries its own counter.
+  Future<void> _serially(Future<void> Function() send) {
+    final run = _outbound.then((_) => send());
+    // The caller still gets [run]'s error; only the chain is kept usable for later sends.
+    _outbound = run.then<void>((_) {}, onError: (Object _) {});
+    return run;
   }
 
   Future<void> _sendHandshake(Uint8List recipient, Uint8List payload) {
@@ -288,6 +402,23 @@ class MeshNode {
   }
 
   int _nextPacketId() => _random.nextInt(0x100000000);
+
+  /// Header fields authenticated with each transport and receipt ciphertext. TTL and the
+  /// fragment index are left out: relays rewrite the first, and fragments differ in the second.
+  static Uint8List _bindingData(
+    PacketType type,
+    int packetId,
+    Uint8List senderId,
+    Uint8List recipientId,
+  ) {
+    final out = Uint8List(1 + 4 + 8 + 8);
+    final data = ByteData.sublistView(out);
+    data.setUint8(0, type.code);
+    data.setUint32(1, packetId, Endian.big);
+    out.setRange(5, 13, senderId);
+    out.setRange(13, 21, recipientId);
+    return out;
+  }
 
   static int _compareIds(List<int> a, List<int> b) {
     for (var i = 0; i < min(a.length, b.length); i++) {

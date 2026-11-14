@@ -4,6 +4,10 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 
 import 'identity.dart';
+import 'replay_window.dart';
+
+/// Explicit transport counter that prefixes every transport frame.
+const int _counterLength = 8;
 
 /// Noise_XX_25519_ChaChaPoly_SHA256: mutual authentication, forward secrecy,
 /// neither side knows the other's static key beforehand.
@@ -58,7 +62,20 @@ class _CipherState {
   final SecretKey? _key;
   int _nonce = 0;
 
-  Future<Uint8List> encrypt(
+  /// Reserves the next counter. Each counter is used for one encryption under this key.
+  int takeCounter() {
+    if (_nonce >= maxSessionMessages) {
+      throw const NoiseException('session message limit reached; re-handshake');
+    }
+    return _nonce++;
+  }
+
+  Future<Uint8List> encrypt(List<int> associatedData, List<int> plaintext) =>
+      encryptAt(takeCounter(), associatedData, plaintext);
+
+  /// Encrypts under an explicit [counter]. The caller must never reuse one.
+  Future<Uint8List> encryptAt(
+    int counter,
     List<int> associatedData,
     List<int> plaintext,
   ) async {
@@ -67,13 +84,26 @@ class _CipherState {
     final box = await _aead.encrypt(
       plaintext,
       secretKey: key,
-      nonce: _nextNonce(),
+      nonce: _nonceBytes(counter),
       aad: associatedData,
     );
     return Uint8List.fromList([...box.cipherText, ...box.mac.bytes]);
   }
 
+  /// Decrypts with the next implicit counter. The counter advances only on success.
   Future<Uint8List> decrypt(
+    List<int> associatedData,
+    List<int> ciphertext,
+  ) async {
+    final counter = _nonce;
+    final plaintext = await decryptAt(counter, associatedData, ciphertext);
+    _nonce = counter + 1;
+    return plaintext;
+  }
+
+  /// Authenticates [ciphertext] under an explicit [counter]. Keeps no state.
+  Future<Uint8List> decryptAt(
+    int counter,
     List<int> associatedData,
     List<int> ciphertext,
   ) async {
@@ -85,7 +115,7 @@ class _CipherState {
     final split = ciphertext.length - _tagLength;
     final box = SecretBox(
       ciphertext.sublist(0, split),
-      nonce: _nextNonce(),
+      nonce: _nonceBytes(counter),
       mac: Mac(ciphertext.sublist(split)),
     );
     try {
@@ -95,13 +125,6 @@ class _CipherState {
     } on SecretBoxAuthenticationError {
       throw const NoiseException('message failed authentication');
     }
-  }
-
-  List<int> _nextNonce() {
-    if (_nonce >= maxSessionMessages) {
-      throw const NoiseException('session message limit reached; re-handshake');
-    }
-    return _nonceBytes(_nonce++);
   }
 }
 
@@ -160,6 +183,11 @@ class _SymmetricState {
 }
 
 /// Post-handshake encrypted channel to one peer.
+///
+/// Transport frames are `counter(8, big-endian) || ciphertext || tag`. The counter travels
+/// in the clear, so a frame can be decrypted when earlier frames were lost or reordered.
+/// Authenticated data is bound to the frame: a frame opens only with the same bytes that
+/// were passed to [encrypt]. A frame that fails authentication changes no receive state.
 class NoiseSession {
   NoiseSession._({
     required _CipherState send,
@@ -171,14 +199,48 @@ class NoiseSession {
 
   final _CipherState _send;
   final _CipherState _receive;
+  final ReplayWindow _replay = ReplayWindow();
   final Uint8List handshakeHash;
   final Uint8List remoteStaticPublicKey;
 
-  Future<Uint8List> encrypt(List<int> plaintext) =>
-      _send.encrypt(const [], plaintext);
+  Future<Uint8List> encrypt(
+    List<int> plaintext, {
+    List<int> associatedData = const [],
+  }) async {
+    final counter = _send.takeCounter();
+    final body = await _send.encryptAt(counter, associatedData, plaintext);
+    final frame = Uint8List(_counterLength + body.length);
+    ByteData.sublistView(frame).setUint64(0, counter, Endian.big);
+    frame.setRange(_counterLength, frame.length, body);
+    return frame;
+  }
 
-  Future<Uint8List> decrypt(List<int> ciphertext) =>
-      _receive.decrypt(const [], ciphertext);
+  Future<Uint8List> decrypt(
+    List<int> frame, {
+    List<int> associatedData = const [],
+  }) async {
+    if (frame.length < _counterLength + _tagLength) {
+      throw const NoiseException('transport frame too short');
+    }
+    final bytes = Uint8List.fromList(frame);
+    final counter = ByteData.sublistView(bytes).getUint64(0, Endian.big);
+    if (counter < 0 || counter >= maxSessionMessages) {
+      throw const NoiseException('transport counter out of range');
+    }
+    if (!_replay.accepts(counter)) {
+      throw const NoiseException('transport message replayed or too old');
+    }
+    final plaintext = await _receive.decryptAt(
+      counter,
+      associatedData,
+      bytes.sublist(_counterLength),
+    );
+    // Recorded only now: a concurrent copy of this frame may have been accepted meanwhile.
+    if (!_replay.accept(counter)) {
+      throw const NoiseException('transport message replayed or too old');
+    }
+    return plaintext;
+  }
 }
 
 enum _Role { initiator, responder }

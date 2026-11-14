@@ -1,7 +1,41 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter_test/flutter_test.dart';
 import 'package:offmesh/core/mesh/transport.dart';
+
+/// Deterministic virtual time for relay jitter.
+///
+/// Every pause lasts [hopDelay] whatever jitter the router asked for, so links stay FIFO
+/// and copies that travel equal-length paths land inside each other's relay window.
+class VirtualTime {
+  VirtualTime({this.hopDelay = const Duration(milliseconds: 50)});
+
+  final Duration hopDelay;
+  DateTime now = DateTime.utc(2026, 1, 1);
+  final List<(DateTime, Completer<void>)> _timers = [];
+
+  Future<void> pause(Duration _) {
+    final completer = Completer<void>();
+    _timers.add((now.add(hopDelay), completer));
+    return completer.future;
+  }
+
+  /// Fires timers in deadline order (ties in creation order) until nothing is pending.
+  Future<void> run() async {
+    await pumpEventQueue();
+    while (_timers.isNotEmpty) {
+      var next = 0;
+      for (var i = 1; i < _timers.length; i++) {
+        if (_timers[i].$1.isBefore(_timers[next].$1)) next = i;
+      }
+      final (deadline, completer) = _timers.removeAt(next);
+      now = deadline;
+      completer.complete();
+      await pumpEventQueue();
+    }
+  }
+}
 
 /// Counts and records every frame sent on any link of the fake topology.
 class FakeNetwork {

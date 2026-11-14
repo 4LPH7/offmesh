@@ -120,8 +120,12 @@ void main() {
           final wire = await sender.session.encrypt(
             _hex(messages[i]['payload'] as String),
           );
+          // Each frame is counter(8) || ciphertext. The counter counts per direction from 0,
+          // which gives 0, 0, 1 for messages 3, 4, 5. Only the ciphertext is the vector's.
+          final counter = ByteData.sublistView(wire).getUint64(0, Endian.big);
+          expect(counter, (i - 3) ~/ 2, reason: 'transport counter $i');
           expect(
-            _toHex(wire),
+            _toHex(wire.sublist(8)),
             messages[i]['ciphertext'],
             reason: 'transport message $i',
           );
@@ -219,6 +223,64 @@ void main() {
         throwsA(isA<NoiseException>()),
       );
     });
+  });
+
+  group('Noise transport frames', () {
+    test('a lost frame does not stop later frames from decrypting', () async {
+      final pair = await _completedPair();
+      final session = pair.initiator.session;
+      await session.encrypt(Uint8List.fromList([1])); // never delivered
+      final second = await session.encrypt(Uint8List.fromList([2]));
+
+      expect(await pair.responder.session.decrypt(second), [2]);
+    });
+
+    test('frames arriving out of order all decrypt', () async {
+      final pair = await _completedPair();
+      final session = pair.initiator.session;
+      final frames = [
+        for (var i = 0; i < 3; i++)
+          await session.encrypt(Uint8List.fromList([i])),
+      ];
+
+      expect(await pair.responder.session.decrypt(frames[2]), [2]);
+      expect(await pair.responder.session.decrypt(frames[0]), [0]);
+      expect(await pair.responder.session.decrypt(frames[1]), [1]);
+    });
+
+    test('a forged frame does not consume the counter it names', () async {
+      final pair = await _completedPair();
+      final real = await pair.initiator.session.encrypt(
+        Uint8List.fromList([7]),
+      );
+      final forged = Uint8List.fromList(real)..[real.length - 1] ^= 0x01;
+
+      await expectLater(
+        pair.responder.session.decrypt(forged),
+        throwsA(isA<NoiseException>()),
+      );
+      expect(await pair.responder.session.decrypt(real), [7]);
+    });
+
+    test(
+      'a frame opens only with the associated data it was sealed with',
+      () async {
+        final pair = await _completedPair();
+        final frame = await pair.initiator.session.encrypt(
+          Uint8List.fromList([9]),
+          associatedData: [1, 2],
+        );
+
+        await expectLater(
+          pair.responder.session.decrypt(frame, associatedData: [1, 3]),
+          throwsA(isA<NoiseException>()),
+        );
+        expect(
+          await pair.responder.session.decrypt(frame, associatedData: [1, 2]),
+          [9],
+        );
+      },
+    );
   });
 
   group('Identity', () {
