@@ -6,8 +6,21 @@ every node already does today: decode, dedupe, decrement TTL, forward. Relay Mod
 power and UX profile on top of that, plus one routing improvement that benefits *every*
 node, relay or not.
 
-Relays never hold Noise session keys, so they see only the 26-byte header. That is already
-true of `MeshRouter` and does not change.
+Relays never hold Noise session keys, so they never read message content. Once frames are
+sealed (Phase 2), a relay must hold the unit seal key to read the header and forward, so a
+relay is a full unit member in v1. See `docs/mission_plan.md` section 4.5 for the capture
+risk this puts on an unattended relay phone.
+
+> **Status, 2026-11-14.** This document is a proposal; parts differ from the code.
+> - Built: the reverse-path table, inside `lib/core/mesh/router.dart` (no separate
+>   `routing_table.dart`), with a 5-minute route lifetime and a 256-route cap.
+> - Built: per-link flood suppression, which this document does not describe.
+> - Not built: relay-side unicast forwarding. Only `MeshRouter.originateTo` reads the
+>   table, and `MeshNode` does not call it, so all traffic still floods. It is deferred
+>   until routes are learned from sealed, authenticated frames; today a neighbour could
+>   spoof a sender ID and attract traffic.
+> - Relay Mode screen: Phase 4 (REQ-25). Foreground service: Phase 3 (REQ-21).
+> - The 10-node line tests below assume more hops than `maxTtl = 7` allows end to end.
 
 ## What the codebase already gives us
 

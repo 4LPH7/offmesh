@@ -2,58 +2,68 @@
 
 ## What This Is
 
-100% Smartphone-Native Offline Encrypted Mesh Messenger & Voice Communicator. Built in Flutter for Android (with Windows Desktop support for testing), it enables end-to-end encrypted messaging, Push-to-Talk (PTT) voice bursts, and full-duplex voice calls directly between standard smartphones without internet, SIM recharge, central servers, or external radio hardware.
+An offline, end-to-end encrypted messenger for a small pre-provisioned group of stock
+Android phones. No internet, SIM, server, or extra radio hardware. Built in Flutter. A
+Windows desktop build exists as a LAN-only test peer and packet-capture station.
 
 ## Core Value
 
-Zero-infrastructure, phone-to-phone private communication combining local high-speed P2P links with multi-hop BLE 5.0 mesh and delay-tolerant store-and-forward custody transfer.
+Phone-to-phone private messaging where frames are sealed under a unit key, identities are
+not visible to outside observers, emissions are under operator control, and a captured
+phone can be wiped by deleting its keys.
 
 ## Requirements
 
-### Validated
+`REQUIREMENTS.md` is the single source for requirement IDs and status. `ROADMAP.md` holds
+phases, success criteria, and device tests.
 
-- [x] Pure-Dart core protocol: 26-byte packet codec, fragmentation/reassembly, and seen cache deduplication
-- [x] Cryptography: Noise XX handshake (`Noise_XX_25519_ChaChaPoly_SHA256`) verified against cacophony test vectors
-- [x] In-memory mesh router with TTL-bounded flooding, relay jitter (15–85 ms), and duplicate suppression
-- [x] Basic LAN transport: length-prefixed TCP frames, UDP beacon discovery on port 47999, and initial chat UI
+### Validated (committed)
+
+- [x] 26-byte packet codec, fragmentation and reassembly, seen-cache deduplication (2048 entries)
+- [x] Noise XX handshake checked against a published cacophony test vector
+- [x] Flood router with TTL (max 7), relay jitter 15 to 85 ms, duplicate drop
+- [x] LAN transport: length-prefixed TCP frames, UDP beacon on port 47999, one-screen chat UI
 
 ### Active
 
-- [ ] Complete Milestone 1 file alignment (`fragmenter.dart`, `dedup.dart`, 10-node simulator test suite)
-- [ ] Milestone 2: Tier 1 LAN/Hotspot transport + mDNS + SQLite persistence + 1:1 encrypted chat UI with delivery ACKs & QR verification
-- [ ] Milestone 3: Tier 3 Dual-role BLE 5.0 mesh transport (`flutter_blue_plus` + `ble_peripheral`) + Android foreground relay service
-- [ ] Milestone 4: Tier 4 Delay-Tolerant Networking (DTN) Spray-and-Wait store-and-forward custody engine with 25 MB quota
-- [ ] Milestone 5: Tier 2 Routerless Wi-Fi Direct bridge + Serverless WebRTC (`iceServers: []`) full-duplex voice calls
-- [ ] Milestone 6: Native `libcodec2` (1200 bps) FFI integration for ultra-low-bitrate PTT voice bursts over BLE mesh
+- [ ] Phase 1 close-out: commit built work; key schedule, seal freshness, decoder fuzzing
+- [ ] Phase 2: sealed LAN chat on real devices with persistent identity and roster
+- [ ] Phase 3: BLE link and foreground-service relay
+- [ ] Phase 4: operator controls (radio posture, panic wipe, Relay Mode)
+- [ ] Phase 5: store-and-forward for offline recipients
 
 ### Out of Scope
 
-- External radio hardware (ESP32, LoRa SX1262, HF transceivers) — 100% stock-smartphone hardware only
-- Central server dependencies, cloud relays, account registration, phone numbers
-- Unencrypted mesh forwarding (all payloads must be encrypted before transmission)
+- External radio hardware (LoRa, HF, dongles)
+- Servers, cloud relays, accounts, phone numbers
+- iOS
+- Voice calls and live push-to-talk (voice notes are parked; see ROADMAP "Not planned")
+- Message history on disk (messages are memory-only; only keys and the roster persist)
 
 ## Context
 
-- Target OS: Android 8.0+ (API 26+) for Bluetooth 5.0 LE Coded PHY support; Windows 11 desktop runner for developer testing.
-- UI Framework: Flutter with Material 3.
-- Network stack:
-  - Tier 1: Local WLAN / zero-data hotspot (`LanTransport`)
-  - Tier 2: Direct P2P Wi-Fi Direct / Wi-Fi Aware (`WifiDirectTransport`)
-  - Tier 3: Multi-hop BLE 5.0 (`BleTransport`)
-  - Tier 4: Delay-tolerant store-and-forward custody sync (`DtnStoreRouter`)
+- Target: Android 8.0+ (API 26+). Windows 11 runner for LAN testing; roster import there is paste or file, not camera.
+- UI: Flutter, Material 3, plain `ChangeNotifier`.
+- Transports, all behind `MeshTransport` (one object = one link):
+  - LAN over Wi-Fi or hotspot (`LanLink`) — exists
+  - BLE (`BleLink`) — Phase 3
+- Test hardware: two or more Android phones, one Windows PC. No radio test gear.
 
 ## Constraints
 
-- **Hardware**: Stock Android smartphones only. No specialized chips or external dongles.
-- **Security**: Mutual authentication via Noise XX; out-of-band key verification via QR codes.
-- **Resource limits**: 25 MB maximum DTN custody storage per device; 4096-entry deduplication cache.
+- **Hardware**: Stock Android phones only.
+- **Security**: Noise XX between peers; unit-key sealing of whole frames; key fingerprint comparison between operators.
+- **Limits in code**: TTL 7, payload 220 bytes per packet, 2048-entry seen cache, 32 in-flight reassemblies, 256 routes.
+- **Honest limits**: a transmitter can always be located by radio; a captured unlocked phone gives up its unit secret and roster until wiped. See `docs/mission_plan.md`.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| 100% Smartphone Silicon | Eliminates barrier to entry; no external dongles required | ✓ Good |
-| 4-Tier Transport Hierarchy | Optimizes throughput vs range across Wi-Fi, Wi-Fi Direct, BLE, and DTN | ✓ Good |
-| Noise XX over X25519/ChaChaPoly | Mutual authentication without PKI or certificate authorities | ✓ Good |
-| Spray-and-Wait DTN | Bounded epidemic replication ($K=6$) achieves city-wide reach without flooding storage | ✓ Good |
-| Codec2 (1200 bps) for BLE Voice | Allows voice streaming within BLE's narrow bandwidth (~150 bytes/sec) | ✓ Good |
+| Stock phones only | No barrier to entry | Good |
+| Noise XX on `cryptography` | Mutual authentication without a PKI; the `noise_protocol` package is discontinued | Good |
+| Managed flooding, per-link suppression | Survives mobility; links are point-to-point so a full relay cancel would starve neighbours | Good |
+| Static IDs inside the seal, rotating IDs on discovery only | Rotation adds nothing inside an encrypted header and would complicate session keying | Good |
+| Receipts inside the Noise session | The handshake hash is not secret, so a separate MAC would prove nothing | Good |
+| Five phases, hardening folded in | Fuzzing is cheap now; a late hardening phase hides defects | Pending |
+| Voice dropped from the schedule | Continuous transmission conflicts with emission control | Pending |

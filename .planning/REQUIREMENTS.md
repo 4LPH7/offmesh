@@ -1,37 +1,62 @@
-# Requirements: OffMesh (Tactical Smartphone-Native Mesh)
+# Requirements: OffMesh
 
-## Phase 1: Hardened Pure-Dart Protocol Core
-- [x] **REQ-01**: 26-byte binary packet header codec with strict validation and TTL up to 15.
-- [x] **REQ-02**: Message fragmentation and bounded reassembly buffer (32 slots).
-- [x] **REQ-03**: Seen cache deduplication keyed on `(SenderID, PacketID, FragIdx)`.
-- [x] **REQ-04**: Noise XX handshake (`Noise_XX_25519_ChaChaPoly_SHA256`) with mutual authentication and glare tie-breaking.
-- [ ] **REQ-05**: Managed flood suppression with reverse-path routing table (cancels relay if neighbor relays first).
-- [ ] **REQ-06**: Outer frame symmetric unit-key sealing to conceal headers from unkeyed observers.
-- [ ] **REQ-07**: Hourly rotating HMAC Peer IDs computable only by unit roster holders.
-- [ ] **REQ-08**: Cryptographic end-to-end delivery receipts and 10-node simulated topology verification.
+Single source for requirement IDs. `ROADMAP.md` and plan files cite these IDs.
+A box is ticked only when the behaviour is implemented, tested, committed, and matches the
+wording. "Built" in the table means code and tests exist but the work is uncommitted or not
+wired into the running app.
 
-## Phase 2: Tier 1 LAN Transport & Operator UI
-- [ ] **REQ-09**: LAN transport combining mDNS (`_offmesh._tcp`) with UDP port 47999 broadcast and TCP framing.
-- [ ] **REQ-10**: Three-state EMCON radio posture switch: Silent (passive), Quiet (scheduled/batch), and Normal.
-- [ ] **REQ-11**: Ephemeral memory-only message storage by default with one-touch panic wipe and duress PIN.
-- [ ] **REQ-12**: Pre-deployment roster exchange via animated 2D QR codes and local APK sharing.
+## Phase 1: Protocol core
+- [x] **REQ-01**: 26-byte binary packet header codec with strict validation; TTL 0 to 7 (`maxTtl = 7`).
+- [x] **REQ-02**: Message fragmentation and bounded reassembly (32 in-flight messages).
+- [x] **REQ-03**: Seen-cache deduplication keyed on `(SenderID, PacketID, FragIdx)`, 2048 entries, 300 s.
+- [x] **REQ-04**: Noise XX handshake (`Noise_XX_25519_ChaChaPoly_SHA256`) with mutual authentication and glare tie-break.
+- [ ] **REQ-05**: Per-link flood suppression: a relay is skipped on any link that already delivered the same packet during the jitter window. Reverse-path table used for the originator's first hop.
+- [ ] **REQ-06**: Sealed envelope codec: whole frame encrypted under a 32-byte key with ChaCha20-Poly1305, random nonce, domain label.
+- [ ] **REQ-07**: Rotating 8-byte discovery IDs from HMAC-SHA256 over public key and hourly epoch, with a roster resolver covering the previous, current, and next epoch.
+- [ ] **REQ-08**: End-to-end delivery receipt carried as a Noise transport message; never acknowledged itself.
+- [ ] **REQ-09**: Explicit transport counter and replay window so lost or reordered frames do not break a session.
+- [ ] **REQ-10**: Key schedule and freshness: seal key and ID key derived separately from the unit secret with HKDF; a timestamp inside the seal bounds replay of recorded frames.
+- [ ] **REQ-11**: Seeded fuzz test over every decoder (packet, sealed envelope, reassembly, receipt): 100,000 mutated inputs, no unhandled exception.
 
-## Phase 3: Tier 3 Dual-Role BLE 5.0 Mesh & Foreground Daemon
-- [ ] **REQ-13**: Android 14+ typed foreground service (`connectedDevice`) for persistent pocket mesh relaying.
-- [ ] **REQ-14**: Dual-role BLE 5.0 transport running concurrent Central scanner and GATT Peripheral advertiser.
-- [ ] **REQ-15**: Dynamic MTU negotiation (request 251 bytes) with opportunistic `PHY_LE_CODED` request.
+## Phase 2: Sealed LAN chat on real devices
+- [ ] **REQ-12**: Persistent identity: static key created once and stored through the platform keystore.
+- [ ] **REQ-13**: Unit secret and roster stored at rest through the same store; app refuses to link when unprovisioned.
+- [ ] **REQ-14**: Roster provisioning by one static QR code (Windows: paste or file).
+- [ ] **REQ-15**: Every LAN frame sealed, including the link hello and the UDP beacon.
+- [ ] **REQ-16**: No static identifier on the wire: beacon and hello carry rotating IDs; static PeerIDs appear only inside sealed frames.
+- [ ] **REQ-17**: Key fingerprint shown per contact for comparison by eye.
+- [ ] **REQ-18**: Delivery receipt shown in the chat thread.
 
-## Phase 4: Tier 4 Delay-Tolerant Store-and-Forward (DTN)
-- [ ] **REQ-16**: Sealed DTN custody envelope with expiration timestamp and hop quota ($K=6$).
-- [ ] **REQ-17**: Spray-and-Wait custody transfer with inventory vector synchronization.
-- [ ] **REQ-18**: 25 MB device ring buffer storage quota with strict TTL-based pruning.
+## Phase 3: BLE link and background relay
+- [ ] **REQ-19**: `BleLink implements MeshTransport` with link-layer segmentation that works at ATT MTU 23.
+- [ ] **REQ-20**: Dual role: advertise, scan, GATT server, and GATT client at the same time, with Android 12+ Bluetooth permissions.
+- [ ] **REQ-21**: Typed foreground service (`connectedDevice`) that keeps links alive with the screen off.
+- [ ] **REQ-22**: BLE advertisements carry a rotating ID and no static identifier.
 
-## Phase 5: Tier 2 Wi-Fi Direct Bridge & Codec2 PTT Voice
-- [ ] **REQ-19**: Wi-Fi Direct ad-hoc transport via Android `WifiP2pManager` for high-speed direct peer links.
-- [ ] **REQ-20**: Native C `libcodec2` (1200 bps mode) compilation via NDK CMake and `dart:ffi` bindings.
-- [ ] **REQ-21**: Half-duplex Push-to-Talk (PTT) burst service (3–5s audio packets) over BLE mesh and DTN notes.
+## Phase 4: Operator controls
+- [ ] **REQ-23**: Radio posture switch with per-transport definitions: Silent, Quiet, Normal.
+- [ ] **REQ-24**: Panic wipe as key deletion from the keystore plus memory clear.
+- [ ] **REQ-25**: Relay Mode screen: black display, counters, foreground service on.
 
-## Phase 6: Hardening, Fuzzing & Red-Team Audit
-- [ ] **REQ-22**: Binary protocol fuzzing suite executing 100,000+ permutations without unhandled exceptions.
-- [ ] **REQ-23**: Reproducible, deterministic Android APK build configuration.
-- [ ] **REQ-24**: Traffic-analysis audit confirming emission boundaries under Silent and Quiet postures.
+## Phase 5: Store-and-forward
+- [ ] **REQ-26**: One-way encryption to a roster member's static key, with its lost properties documented.
+- [ ] **REQ-27**: Custody envelope with expiry and copy budget; exchange of held message IDs on contact.
+- [ ] **REQ-28**: Memory-only envelope store with a fixed cap and expiry pruning.
+
+## Traceability
+
+| REQ | Phase | Plan | Status |
+|-----|-------|------|--------|
+| REQ-01 to REQ-04 | 1 | (pre-roadmap) | Done, committed |
+| REQ-05 | 1 | 01-01 | Built, uncommitted |
+| REQ-06 | 1 | 01-02 | Built, uncommitted, not wired |
+| REQ-07 | 1 | 01-03 | Built, uncommitted, not wired |
+| REQ-08, REQ-09 | 1 | 01-04 | Built, uncommitted |
+| REQ-10, REQ-11 | 1 | 01-05 | Not started |
+| REQ-12, REQ-13 | 2 | 02-01 | Not started |
+| REQ-14, REQ-17 | 2 | 02-02 | Not started |
+| REQ-15, REQ-16 | 2 | 02-03 | Not started |
+| REQ-18 | 2 | 02-04 | Not started |
+| REQ-19 to REQ-22 | 3 | 03-00 spike first | Not started |
+| REQ-23 to REQ-25 | 4 | TBD | Not started |
+| REQ-26 to REQ-28 | 5 | TBD | Not started |
