@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../app/chat_controller.dart';
+import 'unit_widgets.dart';
 
-/// Single screen for the v0.1 test build: my ID, neighbours, contacts, and one chat thread.
+/// Single screen for the test build: my identity, the unit roster, neighbours, and one chat thread.
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
 
@@ -15,14 +16,12 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final _host = TextEditingController();
   final _port = TextEditingController();
-  final _contactId = TextEditingController();
   final _message = TextEditingController();
 
   @override
   void dispose() {
     _host.dispose();
     _port.dispose();
-    _contactId.dispose();
     _message.dispose();
     super.dispose();
   }
@@ -36,13 +35,36 @@ class _HomePageState extends State<HomePage> {
     await widget.controller.connect(_host.text.trim(), port);
   }
 
-  void _addContact() {
-    try {
-      widget.controller.addContact(_contactId.text);
-      _contactId.clear();
-    } on FormatException catch (error) {
-      widget.controller.reportError(error.message);
-    }
+  void _shareUnit() {
+    final code = widget.controller.unitCode;
+    if (code == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unit code'),
+        content: SizedBox(
+          width: 320,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Holds the unit secret. Show it only to unit members, in person.',
+                ),
+                const SizedBox(height: 8),
+                CodeView(code: code),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _send() async {
@@ -73,6 +95,13 @@ class _HomePageState extends State<HomePage> {
                   c.myId,
                   style: const TextStyle(fontFamily: 'monospace'),
                 ),
+                Text('Fingerprint: ${c.myFingerprint}'),
+                if (c.myIdentityCode != null)
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    title: const Text('My identity code'),
+                    children: [CodeView(code: c.myIdentityCode!)],
+                  ),
                 const SizedBox(height: 4),
                 Text(
                   'Listening on port ${c.listenPort ?? '-'} · '
@@ -107,25 +136,39 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
                 const Divider(height: 32),
-                const Text('Contacts (paste the ID they show)'),
                 Row(
                   children: [
-                    Expanded(
-                      child: TextField(
-                        key: const Key('contact-id-field'),
-                        controller: _contactId,
-                        decoration: const InputDecoration(
-                          hintText: '16 hex characters',
-                        ),
+                    const Expanded(
+                      child: Text(
+                        'Unit members',
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      key: const Key('add-contact-button'),
-                      onPressed: _addContact,
-                      child: const Text('Add'),
+                    OutlinedButton(
+                      key: const Key('share-unit-button'),
+                      onPressed: _shareUnit,
+                      child: const Text('Share unit'),
                     ),
                   ],
+                ),
+                for (final m in c.members)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(m.isSelf ? '${m.name} (this phone)' : m.name),
+                    subtitle: Text(
+                      m.fingerprint,
+                      style: const TextStyle(fontFamily: 'monospace'),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                const Text('Add member (paste or scan their identity code)'),
+                CodeInput(
+                  hint: 'OFFM-ID1:...',
+                  actionLabel: 'Add',
+                  fieldKey: const Key('member-code-field'),
+                  buttonKey: const Key('add-member-button'),
+                  onSubmit: c.addMember,
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -133,7 +176,7 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     for (final id in c.contacts)
                       ChoiceChip(
-                        label: Text(id),
+                        label: Text(c.nameOf(id)),
                         selected: id == c.selectedContact,
                         onSelected: (_) => c.select(id),
                       ),
@@ -148,11 +191,26 @@ class _HomePageState extends State<HomePage> {
                           : Alignment.centerLeft,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 2),
-                        child: Text(
-                          message.outgoing
-                              ? 'Me: ${message.text}'
-                              : message.text,
-                        ),
+                        child: message.outgoing
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(child: Text('Me: ${message.text}')),
+                                  const SizedBox(width: 4),
+                                  message.delivered
+                                      ? const Icon(
+                                          Icons.done_all,
+                                          size: 16,
+                                          semanticLabel: 'Delivered',
+                                        )
+                                      : const Icon(
+                                          Icons.done,
+                                          size: 16,
+                                          semanticLabel: 'Sent',
+                                        ),
+                                ],
+                              )
+                            : Text(message.text),
                       ),
                     ),
                   Row(

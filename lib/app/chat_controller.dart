@@ -3,46 +3,129 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/crypto/identity.dart';
+import '../core/crypto/unit_keys.dart';
 import '../core/mesh/mesh_node.dart';
 import '../core/protocol/packet.dart';
+import '../core/provisioning/unit_roster.dart';
 import '../transports/lan_manager.dart';
+import 'secret_store.dart';
+import 'unit_store.dart';
 
 class ChatMessage {
   const ChatMessage({
     required this.outgoing,
     required this.text,
     required this.at,
+    this.packetId,
+    this.delivered = false,
   });
 
   final bool outgoing;
   final String text;
   final DateTime at;
+
+  /// The mesh packet ID of an outgoing message; its receipt carries the same ID.
+  final int? packetId;
+
+  /// True once the recipient's receipt for [packetId] has arrived.
+  final bool delivered;
+
+  ChatMessage asDelivered() => ChatMessage(
+    outgoing: outgoing,
+    text: text,
+    at: at,
+    packetId: packetId,
+    delivered: true,
+  );
 }
 
-/// App state: contacts, one thread per contact, and the node that carries the messages.
+/// A roster member as the UI shows it.
+class MemberInfo {
+  const MemberInfo({
+    required this.name,
+    required this.peerId,
+    required this.fingerprint,
+    required this.isSelf,
+  });
+
+  final String name;
+  final String peerId;
+  final String fingerprint;
+  final bool isSelf;
+}
+
+/// App state: unit provisioning, contacts (the roster members), one thread per
+/// contact, and the node that carries the messages. LAN starts only once a unit exists.
 class ChatController extends ChangeNotifier {
   ChatController({
     required this.node,
     required this.lan,
+    required this.store,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
   final MeshNode node;
   final LanManager lan;
+  final SecretStore store;
   final DateTime Function() _clock;
 
   final Map<String, List<ChatMessage>> _threads = {};
-  final List<String> _contacts = [];
+  UnitRoster? _unit;
+  List<MemberInfo> _members = const [];
+  String _myFingerprint = '';
   String? _selected;
   String? _lastError;
   int? _listenPort;
   StreamSubscription<ReceivedMessage>? _subscription;
+  StreamSubscription<DeliveryReceiptEvent>? _receiptSubscription;
 
   String get myId => node.peerId.hex;
 
+  String get myFingerprint => _myFingerprint;
+
+  bool get provisioned => _unit != null;
+
   int? get listenPort => _listenPort;
 
-  List<String> get contacts => List.unmodifiable(_contacts);
+  /// Every roster member, this phone included.
+  List<MemberInfo> get members => _members;
+
+  /// Roster members other than this phone, by PeerID hex.
+  List<String> get contacts => [
+    for (final m in _members)
+      if (!m.isSelf) m.peerId,
+  ];
+
+  String nameOf(String peerId) => _members
+      .firstWhere(
+        (m) => m.peerId == peerId,
+        orElse: () => MemberInfo(
+          name: peerId,
+          peerId: peerId,
+          fingerprint: '',
+          isSelf: false,
+        ),
+      )
+      .name;
+
+  /// The unit code to share as QR or text; null when unprovisioned.
+  String? get unitCode => _unit?.toText();
+
+  /// This phone's identity code under its roster name; null when unprovisioned.
+  String? get myIdentityCode {
+    final self = _members.where((m) => m.isSelf);
+    return self.isEmpty ? null : identityCodeFor(self.first.name);
+  }
+
+  /// This phone's identity code under [name], or null when the name is invalid.
+  String? identityCodeFor(String name) {
+    try {
+      return IdentityCode.encode(UnitMember(node.identity.publicKey, name));
+    } on RosterFormatException {
+      return null;
+    }
+  }
 
   String? get selectedContact => _selected;
 
@@ -53,21 +136,67 @@ class ChatController extends ChangeNotifier {
   List<ChatMessage> thread(String contactId) =>
       List.unmodifiable(_threads[contactId] ?? const []);
 
+  /// Loads the stored unit and starts LAN only if there is one. A damaged stored
+  /// unit leaves the phone unprovisioned with an error; importing replaces it.
   Future<void> start() async {
     _subscription = node.messages.listen(handleIncoming);
+    _receiptSubscription = node.receipts.listen(handleReceipt);
     node.start();
-    _listenPort = await lan.start();
+    _myFingerprint = await fingerprint(node.identity.publicKey);
+    try {
+      final unit = await UnitStore.load(store);
+      if (unit != null) {
+        await _apply(unit);
+        await _startLan();
+      }
+    } on UnitStoreException catch (e) {
+      _lastError = '${e.message}. Join the unit again.';
+    }
     notifyListeners();
   }
 
   Future<void> stop() async {
     await _subscription?.cancel();
+    await _receiptSubscription?.cancel();
     await lan.stop();
     await node.stop();
   }
 
+  /// Creates a new unit with this phone as its only member.
+  Future<bool> createUnit(String myName) => _guard(() async {
+    if (provisioned) throw const RosterFormatException('already in a unit');
+    final roster = UnitRoster(UnitStore.generateSecret(), [
+      UnitMember(node.identity.publicKey, myName.trim()),
+    ]);
+    await _install(roster);
+  });
+
+  /// Adds the phone behind [identityCode] to this unit's roster.
+  Future<bool> addMember(String identityCode) => _guard(() async {
+    final unit = _unit;
+    if (unit == null) throw const RosterFormatException('not in a unit');
+    await _install(unit.withMember(IdentityCode.decode(identityCode)));
+  });
+
+  /// Joins (or re-joins) the unit in [unitCode], replacing any stored unit. Refused
+  /// unless the roster lists this phone's own public key.
+  Future<bool> importUnit(String unitCode) => _guard(() async {
+    final roster = UnitRoster.fromText(unitCode);
+    if (!roster.contains(node.identity.publicKey)) {
+      throw const RosterFormatException(
+        'this unit code does not list this phone; '
+        'ask a member to add your identity code first',
+      );
+    }
+    await _install(roster, restartLan: true);
+  });
+
   /// Dials a neighbour by IP address. Failures are reported through [lastError].
   Future<void> connect(String host, int port) async {
+    if (!provisioned) {
+      reportError('Join a unit before linking');
+      return;
+    }
     try {
       await lan.connect(host, port);
       _lastError = null;
@@ -83,16 +212,7 @@ class ChatController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Adds a contact by the 16-hex-character ID they show on their screen.
-  void addContact(String idHex) {
-    final id = _parseId(idHex);
-    _remember(id);
-    _selected = id;
-    notifyListeners();
-  }
-
   void select(String contactId) {
-    _remember(contactId);
     _selected = contactId;
     notifyListeners();
   }
@@ -100,17 +220,30 @@ class ChatController extends ChangeNotifier {
   Future<void> send(String contactId, String text) async {
     final id = _parseId(contactId);
     try {
-      await node.sendText(_bytesOf(id), Uint8List.fromList(utf8.encode(text)));
+      final packetId = await node.sendText(
+        _bytesOf(id),
+        Uint8List.fromList(utf8.encode(text)),
+      );
       _lastError = null;
-      _append(id, ChatMessage(outgoing: true, text: text, at: _clock()));
+      _append(
+        id,
+        ChatMessage(
+          outgoing: true,
+          text: text,
+          at: _clock(),
+          packetId: packetId,
+        ),
+      );
     } on StateError catch (error) {
       _lastError = error.message;
       notifyListeners();
     }
   }
 
+  /// Messages from senders outside the roster are dropped.
   void handleIncoming(ReceivedMessage message) {
     final id = message.senderId.hex;
+    if (!contacts.contains(id)) return;
     _append(
       id,
       ChatMessage(
@@ -121,14 +254,74 @@ class ChatController extends ChangeNotifier {
     );
   }
 
-  void _append(String contactId, ChatMessage message) {
-    _remember(contactId);
-    _threads.putIfAbsent(contactId, () => []).add(message);
+  /// Marks the sent message with the receipt's packet ID delivered, but only in the
+  /// thread of the peer that sent the receipt. Anything else is ignored.
+  void handleReceipt(DeliveryReceiptEvent event) {
+    final thread = _threads[event.peerId.hex];
+    if (thread == null) return;
+    final index = thread.indexWhere(
+      (m) => m.outgoing && !m.delivered && m.packetId == event.receipt.packetId,
+    );
+    if (index < 0) return;
+    thread[index] = thread[index].asDelivered();
     notifyListeners();
   }
 
-  void _remember(String contactId) {
-    if (!_contacts.contains(contactId)) _contacts.add(contactId);
+  Future<bool> _guard(Future<void> Function() action) async {
+    try {
+      await action();
+      _lastError = null;
+      return true;
+    } on RosterFormatException catch (e) {
+      _lastError = e.message;
+      return false;
+    } catch (_) {
+      // Platform errors may include file paths; keep the message generic.
+      _lastError = 'Could not save the unit or start linking';
+      return false;
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// Saves first, so a failed write never leaves the phone linking on an unsaved unit.
+  /// [restartLan] drops links made under a previous unit.
+  Future<void> _install(UnitRoster roster, {bool restartLan = false}) async {
+    await UnitStore.save(store, roster);
+    await _apply(roster);
+    if (restartLan && _listenPort != null) {
+      await lan.stop();
+      _listenPort = null;
+    }
+    await _startLan();
+  }
+
+  Future<void> _apply(UnitRoster roster) async {
+    final me = node.identity.publicKey;
+    _members = List.unmodifiable([
+      for (final m in roster.members)
+        MemberInfo(
+          name: m.name,
+          peerId: (await peerIdFor(m.publicKey)).hex,
+          fingerprint: await fingerprint(m.publicKey),
+          isSelf: listEquals(m.publicKey, me),
+        ),
+    ]);
+    // Seal key and roster for the wire; a member added while listening can link at once.
+    await lan.configure(await UnitKeys.derive(roster.unitSecret), [
+      for (final m in roster.members) m.publicKey,
+    ]);
+    _unit = roster;
+    if (_selected != null && !contacts.contains(_selected)) _selected = null;
+  }
+
+  Future<void> _startLan() async {
+    _listenPort ??= await lan.start();
+  }
+
+  void _append(String contactId, ChatMessage message) {
+    _threads.putIfAbsent(contactId, () => []).add(message);
+    notifyListeners();
   }
 
   static String _parseId(String text) {

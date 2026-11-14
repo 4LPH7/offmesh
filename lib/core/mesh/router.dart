@@ -103,7 +103,8 @@ class MeshRouter {
 
   Future<void> stop() async {
     _started = false;
-    for (final subscription in _subscriptions.values) {
+    // Copy: a link closing during stop calls removeTransport, which edits the map.
+    for (final subscription in _subscriptions.values.toList()) {
       await subscription.cancel();
     }
     _subscriptions.clear();

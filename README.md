@@ -13,30 +13,49 @@ Works today over Wi-Fi or a phone hotspot:
 - **Encrypted chat.** `Noise_XX_25519_ChaChaPoly_SHA256` session per pair of peers,
   checked against a published test vector. The responder's key is checked against the
   dialled ID before the initiator reveals its own.
-- **Multi-hop relaying.** Flood routing with duplicate drop, TTL of 7, and jittered
-  relays. Relays forward ciphertext they cannot read.
+- **Multi-hop relaying.** Flood routing with duplicate drop, per-link flood suppression,
+  TTL of 7, and jittered relays. Relays forward ciphertext they cannot read.
 - **Fragmentation** of messages larger than one 220-byte packet.
-- **LAN links.** Framed TCP, discovery by UDP beacon on port 47999, manual IP:port connect.
-- **One screen.** My ID, connect, add a contact by pasting their ID, chat.
+- **Lossy links tolerated.** Each transport frame carries an explicit counter checked
+  against a replay window, so lost or reordered frames do not break a session.
+- **Delivery receipts.** The recipient answers each message with an end-to-end encrypted
+  receipt. A sent message shows one tick, then two once its receipt arrives.
+- **Persistent identity** in the Android Keystore-backed store (Windows: a DPAPI-encrypted
+  file).
+- **Unit roster.** One phone creates a unit; others join by showing their identity code
+  (QR or text) to a member, who adds it and shares the unit code back. Every member and
+  this phone show a key fingerprint to compare in person. Messages from phones outside
+  the roster are dropped.
+- **Sealed LAN.** Every TCP frame, the link hello and the UDP beacon (port 47999) are
+  encrypted under the unit's seal key. Peers identify themselves only by an hourly
+  rotating ID inside the seal; static IDs and packet headers never leave a phone in
+  cleartext. Each link starts with a challenge from both sides, and the hello must echo
+  it, so a hello copied from another connection is refused. A phone without the unit key,
+  or outside the roster, cannot link. A link that goes silent for 30 seconds is closed
+  (healthy links send keepalives). Manual IP:port connect is still available.
 
-Built and tested, but not yet used by the running app:
-
-- Per-link flood suppression and a reverse-path table.
-- Sealed envelope: whole frames encrypted under a shared unit key.
-- Rotating hourly discovery IDs with a roster resolver.
-- Delivery receipts, and a transport counter with a replay window so lost or reordered
-  frames no longer break a session.
+Built and tested, but not yet used by the running app: a reverse-path table for unicast
+return traffic (`MeshRouter.originateTo`). Receipts are flooded instead.
 
 ## Limits
 
-- **Identity persists** across launches in the Android Keystore-backed store (Windows: a
-  DPAPI-encrypted file). It is excluded from backup, so a new or restored phone gets a new
-  identity.
-- **No key verification.** A contact is trusted by pasting their ID. There is no QR scan
-  or fingerprint check yet.
-- **Identities are visible on the LAN.** The beacon and link hello send a static ID in
-  cleartext, and packet headers are not sealed yet.
-- **Messages are memory-only** and are lost on restart.
+- **New phone, new identity.** The identity store is excluded from backup, so a new or
+  restored phone must rejoin the unit.
+- **The roster is unsigned.** Anyone holding the unit code is trusted as a member, and can
+  claim another member's link slot until the real member links again (the newer link
+  wins). Message content stays protected by the per-pair Noise sessions. Show the unit
+  code only to members, in person.
+- **No epoch key chain.** The seal key lasts the unit's lifetime, so a leaked unit code
+  opens the headers of all recorded LAN traffic.
+- **Replay window.** A recorded sealed beacon opens for up to 10 minutes. A phone ignores
+  a copy of a beacon it has already seen, but one it missed can still trigger a dial, and
+  a failed dial pauses beacon dials to that member for 3 seconds.
+- **Relays.** If someone gets a member to dial them (a replayed beacon, or a typed
+  address), they can pass that member's link through to another member. They see only
+  sealed frames, but they can drop or delay them.
+- Frame lengths and timing stay visible on the wire.
+- **"Delivered" means the recipient's phone decrypted the message**, not that anyone read
+  it. Messages and their marks are memory-only and are lost on restart; there is no resend.
 - **No Bluetooth, no voice, no store-and-forward.**
 - **A transmitting phone can always be located by radio.** No app changes that. See
   [docs/mission_plan.md](docs/mission_plan.md) for the threat model.
@@ -69,10 +88,13 @@ The APK is written to `build/app/outputs/flutter-apk/app-debug.apk`.
 ## Two-phone test
 
 1. Phone A turns on a Wi-Fi hotspot. Phone B joins it.
-2. Open the app on both. Each shows its ID and "Listening on port N".
-3. Beacons usually link the phones within a few seconds. If not, on B enter A's IP and
+2. On A, create a unit. On B, show B's identity code; on A, use Add member to scan or
+   paste it, then Share unit. On B, scan or paste A's unit code to join.
+3. Compare the fingerprints shown on both phones. Each shows "Listening on port N".
+4. Beacons usually link the phones within a few seconds. If not, on B enter A's IP and
    port, then Connect.
-4. Copy A's ID into B's contact field and send a message. Reply from A.
-5. Turn off mobile data to confirm nothing leaves the local network.
+5. Select A on B and send a message. It shows two ticks when A's receipt arrives. Reply
+   from A.
+6. Turn off mobile data to confirm nothing leaves the local network.
 
-Multi-hop: add a third phone C linked to B only, and message C from A using C's ID.
+Multi-hop: add a third phone C to the unit, link it to B only, and message C from A.

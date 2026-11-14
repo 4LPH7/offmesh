@@ -9,12 +9,14 @@ import 'core/crypto/identity.dart';
 import 'core/mesh/mesh_node.dart';
 import 'transports/lan_manager.dart';
 import 'ui/home_page.dart';
+import 'ui/provisioning_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final store = PlatformSecretStore();
   final Identity identity;
   try {
-    identity = await IdentityStore.loadOrCreate(PlatformSecretStore());
+    identity = await IdentityStore.loadOrCreate(store);
   } on IdentityStoreException catch (e) {
     runApp(StartupErrorApp(message: e.message));
     return;
@@ -31,8 +33,18 @@ Future<void> main() async {
   final controller = ChatController(
     node: node,
     lan: LanManager(node: node),
+    store: store,
   );
-  await controller.start();
+  try {
+    await controller.start();
+  } catch (_) {
+    runApp(
+      const StartupErrorApp(
+        message: 'secure storage or networking is unavailable',
+      ),
+    );
+    return;
+  }
   runApp(OffMeshApp(controller: controller));
 }
 
@@ -46,7 +58,12 @@ class OffMeshApp extends StatelessWidget {
     return MaterialApp(
       title: 'OffMesh',
       theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
-      home: HomePage(controller: controller),
+      home: ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) => controller.provisioned
+            ? HomePage(controller: controller)
+            : ProvisioningPage(controller: controller),
+      ),
     );
   }
 }

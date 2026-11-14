@@ -3,26 +3,53 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:offmesh/app/chat_controller.dart';
+import 'package:offmesh/app/secret_store.dart';
+import 'package:offmesh/app/unit_store.dart';
 import 'package:offmesh/core/crypto/identity.dart';
 import 'package:offmesh/core/mesh/mesh_node.dart';
+import 'package:offmesh/core/protocol/delivery_ack.dart';
+import 'package:offmesh/core/protocol/packet.dart';
+import 'package:offmesh/core/provisioning/unit_roster.dart';
 import 'package:offmesh/transports/lan_manager.dart';
 import 'package:offmesh/ui/home_page.dart';
 
-const String _contactId = '0123456789abcdef';
+/// A started controller for "Bravo" in a unit with "Alpha", and Alpha's identity.
+Future<(ChatController, Identity)> _setUp(WidgetTester tester) async {
+  tester.view.physicalSize = const Size(800, 3000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  final me = await tester.runAsync(Identity.generate) as Identity;
+  final alpha = await tester.runAsync(Identity.generate) as Identity;
+  final node = MeshNode(
+    identity: me,
+    transports: const [],
+    random: Random(1),
+    delay: (_) async {},
+  );
+  final controller = ChatController(
+    node: node,
+    lan: LanManager(node: node, beaconPort: 0),
+    store: MemorySecretStore(),
+  );
+  await tester.runAsync(() async {
+    await controller.start();
+    await controller.importUnit(
+      UnitRoster(UnitStore.generateSecret(), [
+        UnitMember(me.publicKey, 'Bravo'),
+        UnitMember(alpha.publicKey, 'Alpha'),
+      ]).toText(),
+    );
+  });
+  addTearDown(() => tester.runAsync(controller.stop));
+  return (controller, alpha);
+}
 
 void main() {
-  testWidgets('shows my ID and adds a contact by pasted ID', (tester) async {
-    final identity = await tester.runAsync(Identity.generate) as Identity;
-    final node = MeshNode(
-      identity: identity,
-      transports: const [],
-      random: Random(1),
-      delay: (_) async {},
-    );
-    final controller = ChatController(
-      node: node,
-      lan: LanManager(node: node, beaconPort: 0),
-    );
+  testWidgets('shows my ID, members with fingerprints, and selects a contact', (
+    tester,
+  ) async {
+    final (controller, alpha) = await _setUp(tester);
+    final alphaPrint = controller.members.last.fingerprint;
 
     await tester.pumpWidget(
       MaterialApp(home: HomePage(controller: controller)),
@@ -30,15 +57,53 @@ void main() {
 
     expect(find.text('My ID'), findsOneWidget);
     expect(find.text(controller.myId), findsOneWidget);
+    expect(find.text('Bravo (this phone)'), findsOneWidget);
+    expect(find.text(alphaPrint), findsOneWidget);
+    expect(find.byKey(const Key('share-unit-button')), findsOneWidget);
 
-    await tester.enterText(
-      find.byKey(const Key('contact-id-field')),
-      _contactId,
-    );
-    await tester.tap(find.byKey(const Key('add-contact-button')));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Alpha'));
     await tester.pump();
 
-    expect(controller.selectedContact, _contactId);
-    expect(find.text(_contactId), findsWidgets);
+    expect(controller.selectedContact, alpha.peerId.hex);
+  });
+
+  testWidgets('the delivered mark appears only after the matching receipt', (
+    tester,
+  ) async {
+    final (controller, alpha) = await _setUp(tester);
+    final alphaId = alpha.peerId.hex;
+    controller.select(alphaId);
+    await tester.runAsync(() async {
+      await controller.send(alphaId, 'one');
+      await controller.send(alphaId, 'two');
+    });
+    await tester.pumpWidget(
+      MaterialApp(home: HomePage(controller: controller)),
+    );
+
+    expect(find.byIcon(Icons.done), findsNWidgets(2));
+    expect(find.byIcon(Icons.done_all), findsNothing);
+
+    controller.handleReceipt(
+      DeliveryReceiptEvent(
+        peerId: alpha.peerId,
+        receipt: DeliveryReceipt(
+          packetId: controller.thread(alphaId).last.packetId!,
+          receivedAt: DateTime.utc(2026),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byIcon(Icons.done), findsOneWidget);
+    expect(find.byIcon(Icons.done_all), findsOneWidget);
+    final delivered = find.ancestor(
+      of: find.byIcon(Icons.done_all),
+      matching: find.byType(Row),
+    );
+    expect(
+      find.descendant(of: delivered.first, matching: find.text('Me: two')),
+      findsOneWidget,
+    );
   });
 }
