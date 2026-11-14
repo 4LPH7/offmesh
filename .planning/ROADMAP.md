@@ -25,7 +25,7 @@ Windows PC. Requirement IDs match `REQUIREMENTS.md`, which is the single source.
 **Goal**: A pure-Dart protocol whose frames, once sealed, reveal nothing to an observer without the unit key, proven in simulation.
 **Depends on**: Nothing
 **Requirements**: REQ-01 to REQ-11
-**Status**: Plans 01-01 to 01-04 are implemented and tested but uncommitted. 134 tests pass.
+**Status**: Plans 01-01 to 01-04 are implemented, tested, and committed (5534f72). 134 tests pass. Plan 01-05 remains.
 **Success Criteria** (what must be TRUE):
   1. A relay is skipped on every link that already delivered the same packet during the jitter window (per-link suppression; links are point-to-point).
   2. A sealed frame shows no header field in cleartext, fails to open under a wrong key or any flipped bit, and is rejected when older than the freshness window.
@@ -129,7 +129,7 @@ Cut or parked so they stop reappearing. Each needs a stated reason to return.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Protocol core | 4/5 | In progress (uncommitted) | - |
+| 1. Protocol core | 4/5 | In progress | - |
 | 2. Sealed LAN chat | 0/5 | Not started | - |
 | 3. BLE link and relay | 0/TBD | Not started | - |
 | 4. Operator controls | 0/TBD | Not started | - |

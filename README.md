@@ -19,7 +19,7 @@ Works today over Wi-Fi or a phone hotspot:
 - **LAN links.** Framed TCP, discovery by UDP beacon on port 47999, manual IP:port connect.
 - **One screen.** My ID, connect, add a contact by pasting their ID, chat.
 
-Built and tested, but not yet used by the running app (uncommitted):
+Built and tested, but not yet used by the running app:
 
 - Per-link flood suppression and a reverse-path table.
 - Sealed envelope: whole frames encrypted under a shared unit key.

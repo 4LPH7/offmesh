@@ -2,7 +2,7 @@
 
 Single source for requirement IDs. `ROADMAP.md` and plan files cite these IDs.
 A box is ticked only when the behaviour is implemented, tested, committed, and matches the
-wording. "Built" in the table means code and tests exist but the work is uncommitted or not
+wording. "Built" in the table means code and tests are committed but the feature is not
 wired into the running app.
 
 ## Phase 1: Protocol core
@@ -13,8 +13,8 @@ wired into the running app.
 - [ ] **REQ-05**: Per-link flood suppression: a relay is skipped on any link that already delivered the same packet during the jitter window. Reverse-path table used for the originator's first hop.
 - [ ] **REQ-06**: Sealed envelope codec: whole frame encrypted under a 32-byte key with ChaCha20-Poly1305, random nonce, domain label.
 - [ ] **REQ-07**: Rotating 8-byte discovery IDs from HMAC-SHA256 over public key and hourly epoch, with a roster resolver covering the previous, current, and next epoch.
-- [ ] **REQ-08**: End-to-end delivery receipt carried as a Noise transport message; never acknowledged itself.
-- [ ] **REQ-09**: Explicit transport counter and replay window so lost or reordered frames do not break a session.
+- [x] **REQ-08**: End-to-end delivery receipt carried as a Noise transport message; never acknowledged itself.
+- [x] **REQ-09**: Explicit transport counter and replay window so lost or reordered frames do not break a session.
 - [ ] **REQ-10**: Key schedule and freshness: seal key and ID key derived separately from the unit secret with HKDF; a timestamp inside the seal bounds replay of recorded frames.
 - [ ] **REQ-11**: Seeded fuzz test over every decoder (packet, sealed envelope, reassembly, receipt): 100,000 mutated inputs, no unhandled exception.
 
@@ -48,10 +48,10 @@ wired into the running app.
 | REQ | Phase | Plan | Status |
 |-----|-------|------|--------|
 | REQ-01 to REQ-04 | 1 | (pre-roadmap) | Done, committed |
-| REQ-05 | 1 | 01-01 | Built, uncommitted |
-| REQ-06 | 1 | 01-02 | Built, uncommitted, not wired |
-| REQ-07 | 1 | 01-03 | Built, uncommitted, not wired |
-| REQ-08, REQ-09 | 1 | 01-04 | Built, uncommitted |
+| REQ-05 | 1 | 01-01 | Built (5534f72); suppression live, reverse path unused by the app |
+| REQ-06 | 1 | 01-02 | Built (5534f72), not wired |
+| REQ-07 | 1 | 01-03 | Built (5534f72), not wired |
+| REQ-08, REQ-09 | 1 | 01-04 | Done, committed (5534f72) |
 | REQ-10, REQ-11 | 1 | 01-05 | Not started |
 | REQ-12, REQ-13 | 2 | 02-01 | Not started |
 | REQ-14, REQ-17 | 2 | 02-02 | Not started |

@@ -23,7 +23,7 @@ See: docs/mission_plan.md (threat model, limits, design decisions)
 
 Phase: 1 of 5 (Protocol core)
 Plan: 4 of 5 in current phase
-Status: Plans 01-01 to 01-04 implemented and tested, UNCOMMITTED. Plan 01-05 not started.
+Status: Plans 01-01 to 01-04 implemented, tested, and committed (5534f72). Plan 01-05 not started.
 Last activity: 2026-11-14 — Reviewed plan and roadmap against docs and code; roadmap cut from 6 phases to 5; requirements renumbered REQ-01 to REQ-28.
 
 ## Performance Metrics
