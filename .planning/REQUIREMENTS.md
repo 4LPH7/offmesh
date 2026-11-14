@@ -19,7 +19,7 @@ wired into the running app.
 - [x] **REQ-11**: Seeded fuzz test over every decoder (packet, sealed envelope, reassembly, receipt, LAN framing): 100,000 mutated inputs, no unhandled exception.
 
 ## Phase 2: Sealed LAN chat on real devices
-- [ ] **REQ-12**: Persistent identity: static key created once and stored through the platform keystore.
+- [x] **REQ-12**: Persistent identity: static key created once and stored through the platform keystore.
 - [ ] **REQ-13**: Unit secret and roster stored at rest through the same store; app refuses to link when unprovisioned.
 - [ ] **REQ-14**: Roster provisioning by one static QR code (Windows: paste or file).
 - [ ] **REQ-15**: Every LAN frame sealed, including the link hello and the UDP beacon.
@@ -53,7 +53,8 @@ wired into the running app.
 | REQ-07 | 1 | 01-03 | Built (5534f72), not wired |
 | REQ-08, REQ-09 | 1 | 01-04 | Done, committed (5534f72) |
 | REQ-10, REQ-11 | 1 | 01-05 | Done, committed |
-| REQ-12, REQ-13 | 2 | 02-01 | Not started |
+| REQ-12 | 2 | 02-01 | Done (Android verified by build; device restart check pending) |
+| REQ-13 | 2 | 02-02 | Not started |
 | REQ-14, REQ-17 | 2 | 02-02 | Not started |
 | REQ-15, REQ-16 | 2 | 02-03 | Not started |
 | REQ-18 | 2 | 02-04 | Not started |

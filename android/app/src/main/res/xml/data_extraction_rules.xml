@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ ignores allowBackup="false" for device-to-device transfer.
+     flutter_secure_storage keeps its wrapped key and ciphertext in shared
+     prefs; the Keystore key that unwraps them never leaves the device, so a
+     copied file would make the identity unreadable and block startup. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="." />
+    </device-transfer>
+</data-extraction-rules>

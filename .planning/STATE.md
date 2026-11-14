@@ -5,8 +5,8 @@ progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 10
-  completed_plans: 5
-  percent: 50
+  completed_plans: 6
+  percent: 60
 ---
 
 # Project State
@@ -17,18 +17,18 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 See: docs/mission_plan.md (threat model, limits, design decisions)
 
 **Core value:** Offline, end-to-end encrypted phone-to-phone messaging for a pre-provisioned unit, with sealed frames and operator-controlled emissions.
-**Current focus:** Phase 2 (sealed LAN chat on real devices). First: decide the epoch key chain, then plan 02-01.
+**Current focus:** Phase 2. Next: plan 02-02 (roster and QR). Decide the epoch key chain before 02-03.
 
 ## Current Position
 
 Phase: 2 of 5 (Sealed LAN chat on real devices)
-Plan: 0 of 5 in current phase
+Plan: 1 of 5 in current phase
 Status: Phase 1 complete (all five plans committed). Phase 2 not started.
-Last activity: 2026-11-14 — Plan 01-05 built: HKDF unit keys, freshness timestamp in the seal (overhead now 32 bytes), 100,000-input decoder fuzz test. Phase 1 closed.
+Last activity: 2026-11-14 — Plan 02-01 built: identity persists via flutter_secure_storage; Android auto-backup and device transfer disabled for its prefs.
 
 ## Performance Metrics
 
-- Total tests: 147 passing (`flutter test`), includes the 10-node simulator and a 100,000-input decoder fuzz test.
+- Total tests: 158 passing (`flutter test`), includes the 10-node simulator and a 100,000-input decoder fuzz test.
 - Lints: clean (`flutter analyze`).
 - Debug APK builds (`flutter build apk --debug`); NDK path set in `android/local.properties`.
 
@@ -36,7 +36,7 @@ Last activity: 2026-11-14 — Plan 01-05 built: HKDF unit keys, freshness timest
 
 - `SealedEnvelope`, `RosterResolver` and `UnitKeys` have no callers outside their tests.
 - The reverse-path table is used only by `MeshRouter.originateTo`, which `MeshNode` does not call; all traffic still floods.
-- Identity is regenerated on every launch (`lib/main.dart`).
+- Android builds need `ANDROID_NDK_HOME=D:\Android\ndk-r28c` (the SDK copy at `ndk/28.2.13676358` is an empty partial install). Windows build needs the Visual Studio "C++ ATL for latest build tools" component for flutter_secure_storage.
 - LAN beacon and link hello still send a static PeerID in cleartext.
 - Delivery receipts are not shown in the UI.
 

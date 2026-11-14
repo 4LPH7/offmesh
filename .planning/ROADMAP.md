@@ -59,7 +59,7 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
-- [ ] 02-01: Persistent identity and unit store (keystore-backed), replacing `Identity.generate()` at launch
+- [x] 02-01: Persistent identity via `flutter_secure_storage` (Android Keystore; Windows DPAPI file), backup disabled (as built: unit secret storage moves to 02-02; Windows build needs the VS C++ ATL component)
 - [ ] 02-02: Roster format, QR export and import, fingerprint display
 - [ ] 02-03: Sealed link wrapper for `LanLink`; sealed beacon and hello with rotating IDs
 - [ ] 02-04: Receipts shown in the chat thread; README updated for what Phase 2 ships

@@ -29,8 +29,9 @@ Built and tested, but not yet used by the running app:
 
 ## Limits
 
-- **Identity is not persistent.** A new key is generated on every launch. Nothing is
-  stored in the Android Keystore yet.
+- **Identity persists** across launches in the Android Keystore-backed store (Windows: a
+  DPAPI-encrypted file). It is excluded from backup, so a new or restored phone gets a new
+  identity.
 - **No key verification.** A contact is trusted by pasting their ID. There is no QR scan
   or fingerprint check yet.
 - **Identities are visible on the LAN.** The beacon and link hello send a static ID in
