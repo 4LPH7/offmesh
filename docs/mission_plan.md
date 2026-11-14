@@ -70,7 +70,8 @@ transmissions to nodes". All three overstated the design and are withdrawn.
 ### 4.3 Keys
 
 - **Unit secret**: shared by all members, provisioned before deployment. Seal key and ID
-  key are derived from it separately with HKDF (plan 01-05).
+  key are derived from it separately with HKDF-SHA256 (`UnitKeys`, labels
+  `offmesh/seal/v1` and `offmesh/id/v1`).
 - **Identity key**: one X25519 key per phone, created once, stored through the platform
   keystore (Phase 2). Today it is regenerated on every launch.
 - **Capture consequence**: a phone captured before a wipe yields the unit secret. With it,
@@ -83,9 +84,12 @@ transmissions to nodes". All three overstated the design and are withdrawn.
 ### 4.4 Replay
 
 The seen cache forgets a packet after 300 seconds. Without a freshness check, an outsider
-could replay a recorded sealed frame later and make every relay flood it again. Plan 01-05
-puts a timestamp inside the seal and rejects frames outside a window. This needs phone
-clocks to agree within that window; the window is sized for clocks with no network time.
+could replay a recorded sealed frame later and make every relay flood it again. Each sealed
+frame carries the sender's clock (Unix seconds) inside the ciphertext, and a frame more
+than 10 minutes from the receiver's clock is rejected. Phone clocks must agree within that
+window; it is wide because phones drift without network time. A replay inside the window
+is still caught by the seen cache for its first 300 seconds; the remaining gap (300 s to
+10 min) would need a per-link nonce cache, which is not built.
 
 ### 4.5 Relays
 
@@ -111,7 +115,7 @@ These came from research and are not yet confirmed on the project's phones. Phas
 starts with a spike that measures them.
 
 - Whether both phones can advertise, scan, serve GATT, and connect at once.
-- The ATT MTU the phones negotiate. A sealed frame (26-byte header, 28-byte seal overhead,
+- The ATT MTU the phones negotiate. A sealed frame (26-byte header, 32-byte seal overhead,
   payload) does not fit the 20-byte payload of the default MTU, so link segmentation is
   required either way.
 - Whether a `connectedDevice` foreground service keeps BLE alive with the screen off.

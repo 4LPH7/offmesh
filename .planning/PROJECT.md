@@ -26,7 +26,7 @@ phases, success criteria, and device tests.
 
 ### Active
 
-- [ ] Phase 1 close-out: commit built work; key schedule, seal freshness, decoder fuzzing
+- [x] Phase 1: protocol core (sealing, rotating IDs, receipts, key schedule, freshness, fuzzing) — built and tested; sealing and rotating IDs not yet wired into the app
 - [ ] Phase 2: sealed LAN chat on real devices with persistent identity and roster
 - [ ] Phase 3: BLE link and foreground-service relay
 - [ ] Phase 4: operator controls (radio posture, panic wipe, Relay Mode)

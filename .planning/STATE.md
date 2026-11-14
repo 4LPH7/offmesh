@@ -3,10 +3,10 @@ gsd_state_version: '1.0'
 status: executing
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 10
-  completed_plans: 4
-  percent: 40
+  completed_plans: 5
+  percent: 50
 ---
 
 # Project State
@@ -17,24 +17,24 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 See: docs/mission_plan.md (threat model, limits, design decisions)
 
 **Core value:** Offline, end-to-end encrypted phone-to-phone messaging for a pre-provisioned unit, with sealed frames and operator-controlled emissions.
-**Current focus:** Phase 1 close-out (plan 01-05), then Phase 2.
+**Current focus:** Phase 2 (sealed LAN chat on real devices). First: decide the epoch key chain, then plan 02-01.
 
 ## Current Position
 
-Phase: 1 of 5 (Protocol core)
-Plan: 4 of 5 in current phase
-Status: Plans 01-01 to 01-04 implemented, tested, and committed (5534f72). Plan 01-05 not started.
-Last activity: 2026-11-14 — Reviewed plan and roadmap against docs and code; roadmap cut from 6 phases to 5; requirements renumbered REQ-01 to REQ-28.
+Phase: 2 of 5 (Sealed LAN chat on real devices)
+Plan: 0 of 5 in current phase
+Status: Phase 1 complete (all five plans committed). Phase 2 not started.
+Last activity: 2026-11-14 — Plan 01-05 built: HKDF unit keys, freshness timestamp in the seal (overhead now 32 bytes), 100,000-input decoder fuzz test. Phase 1 closed.
 
 ## Performance Metrics
 
-- Total tests: 134 passing (`flutter test`), includes the 10-node simulator.
+- Total tests: 147 passing (`flutter test`), includes the 10-node simulator and a 100,000-input decoder fuzz test.
 - Lints: clean (`flutter analyze`).
 - Debug APK builds (`flutter build apk --debug`); NDK path set in `android/local.properties`.
 
 ## What is built but not wired
 
-- `SealedEnvelope` and `RosterResolver` have no callers outside their tests.
+- `SealedEnvelope`, `RosterResolver` and `UnitKeys` have no callers outside their tests.
 - The reverse-path table is used only by `MeshRouter.originateTo`, which `MeshNode` does not call; all traffic still floods.
 - Identity is regenerated on every launch (`lib/main.dart`).
 - LAN beacon and link hello still send a static PeerID in cleartext.

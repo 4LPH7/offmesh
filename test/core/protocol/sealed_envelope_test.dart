@@ -49,7 +49,7 @@ void main() {
     final decoded = Packet.decode(await envelope.open(sealed));
 
     expect(sealed.length, frame.length + sealOverhead);
-    expect(sealOverhead, 28);
+    expect(sealOverhead, 32);
     expect(decoded.ttl, 5);
     expect(decoded.packetId, 0xA1B2C3D4);
     expect(decoded.senderId, _senderId);
@@ -148,5 +148,66 @@ void main() {
 
     expect(sealed.sublist(0, 12), nonce);
     expect(await envelope.open(sealed), _frame());
+  });
+
+  group('freshness', () {
+    final sentAt = DateTime.utc(2026, 11, 14, 12);
+    final window = sealFreshnessWindow;
+
+    Future<Uint8List> sealAt(DateTime time) =>
+        SealedEnvelope(_unitKey, clock: () => time).seal(_frame());
+
+    Future<Uint8List> openAt(DateTime time, Uint8List sealed) =>
+        SealedEnvelope(_unitKey, clock: () => time).open(sealed);
+
+    test('opens at the window edges, in both directions', () async {
+      final sealed = await sealAt(sentAt);
+
+      expect(await openAt(sentAt, sealed), _frame());
+      expect(await openAt(sentAt.add(window), sealed), _frame());
+      expect(await openAt(sentAt.subtract(window), sealed), _frame());
+    });
+
+    test('rejects a frame one second outside the window', () async {
+      final sealed = await sealAt(sentAt);
+      const second = Duration(seconds: 1);
+
+      for (final at in [
+        sentAt.add(window + second),
+        sentAt.subtract(window + second),
+      ]) {
+        await expectLater(
+          openAt(at, sealed),
+          throwsA(isA<SealedEnvelopeException>()),
+          reason: 'opened at $at',
+        );
+      }
+    });
+
+    test('a replay recorded an hour ago is rejected', () async {
+      final sealed = await sealAt(sentAt);
+
+      await expectLater(
+        openAt(sentAt.add(const Duration(hours: 1)), sealed),
+        throwsA(isA<SealedEnvelopeException>()),
+      );
+    });
+
+    test('the timestamp is inside the ciphertext, not in cleartext', () async {
+      final sealed = await sealAt(sentAt);
+      final seconds = sentAt.millisecondsSinceEpoch ~/ 1000;
+      final stamp = (ByteData(4)..setUint32(0, seconds)).buffer.asUint8List();
+
+      expect(_containsRun(sealed, stamp), isFalse);
+    });
+
+    test('sealing with a clock before 1970 is refused', () {
+      final early = SealedEnvelope(
+        _unitKey,
+        clock: () => DateTime.utc(1969, 12, 31),
+      );
+
+      expect(early.seal(_frame()), throwsStateError);
+    });
   });
 }

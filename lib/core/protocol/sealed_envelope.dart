@@ -13,8 +13,16 @@ const int sealNonceLength = 12;
 /// Poly1305 tag appended to every sealed frame.
 const int sealTagLength = 16;
 
+/// Sender's clock (Unix seconds, u32 big-endian), encrypted with the frame.
+const int sealTimestampLength = 4;
+
 /// Bytes a sealed frame adds on top of its plaintext.
-const int sealOverhead = sealNonceLength + sealTagLength;
+const int sealOverhead = sealNonceLength + sealTimestampLength + sealTagLength;
+
+/// A frame is accepted only if its timestamp is within this distance of the
+/// receiver's clock, in either direction. Bounds replay of recorded frames after the
+/// seen cache (300 s) has forgotten them; wide because phone clocks drift offline.
+const Duration sealFreshnessWindow = Duration(minutes: 10);
 
 /// Associated data binding every sealed frame to this protocol and version.
 final Uint8List _domainLabel = Uint8List.fromList(
@@ -35,17 +43,26 @@ class SealedEnvelopeException implements Exception {
 
 /// Seals whole wire frames (header and payload) under the shared unit key.
 ///
-/// Frame layout: nonce(12) || ciphertext || tag(16).
+/// Frame layout: nonce(12) || encrypt(timestamp(4) || plaintext) || tag(16).
 // ponytail: random 96-bit nonces; rotate the unit key before 2^32 frames
 // (NIST SP 800-38D bound) to keep nonce-collision odds below 2^-32.
+// ponytail: a replay inside the freshness window is caught only by the seen cache
+// (300 s); a per-link nonce cache would close the remaining gap if it matters.
 class SealedEnvelope {
   /// [nonceSource] is for tests only; production uses a secure RNG.
-  SealedEnvelope(List<int> unitKey, {List<int> Function()? nonceSource})
-    : _key = SecretKey(Uint8List.fromList(_checkedKey(unitKey))),
-      _nonceSource = nonceSource ?? _secureNonce;
+  SealedEnvelope(
+    List<int> unitKey, {
+    List<int> Function()? nonceSource,
+    DateTime Function()? clock,
+  }) : _key = SecretKey(Uint8List.fromList(_checkedKey(unitKey))),
+       _nonceSource = nonceSource ?? _secureNonce,
+       _clock = clock ?? DateTime.now;
 
   final SecretKey _key;
   final List<int> Function() _nonceSource;
+  final DateTime Function() _clock;
+
+  int _nowSeconds() => _clock().toUtc().millisecondsSinceEpoch ~/ 1000;
 
   static List<int> _checkedKey(List<int> key) {
     if (key.length != sealKeyLength) {
@@ -68,8 +85,15 @@ class SealedEnvelope {
     if (nonce.length != sealNonceLength) {
       throw StateError('nonce source must return $sealNonceLength bytes');
     }
+    final now = _nowSeconds();
+    if (now < 0 || now > 0xFFFFFFFF) {
+      throw StateError('clock outside the u32 seconds range');
+    }
+    final stamped = Uint8List(sealTimestampLength + plaintext.length);
+    ByteData.sublistView(stamped).setUint32(0, now, Endian.big);
+    stamped.setRange(sealTimestampLength, stamped.length, plaintext);
     final box = await _aead.encrypt(
-      plaintext,
+      stamped,
       secretKey: _key,
       nonce: nonce,
       aad: _domainLabel,
@@ -77,7 +101,8 @@ class SealedEnvelope {
     return Uint8List.fromList([...nonce, ...box.cipherText, ...box.mac.bytes]);
   }
 
-  /// Returns the plaintext, or throws [SealedEnvelopeException].
+  /// Returns the plaintext, or throws [SealedEnvelopeException] when the frame is
+  /// short, fails authentication, or is outside [sealFreshnessWindow].
   Future<Uint8List> open(List<int> frame) async {
     if (frame.length < sealOverhead) {
       throw const SealedEnvelopeException('frame shorter than seal overhead');
@@ -88,12 +113,17 @@ class SealedEnvelope {
       nonce: frame.sublist(0, sealNonceLength),
       mac: Mac(frame.sublist(tagStart)),
     );
+    final List<int> stamped;
     try {
-      return Uint8List.fromList(
-        await _aead.decrypt(box, secretKey: _key, aad: _domainLabel),
-      );
+      stamped = await _aead.decrypt(box, secretKey: _key, aad: _domainLabel);
     } on SecretBoxAuthenticationError {
       throw const SealedEnvelopeException('frame failed authentication');
     }
+    final bytes = Uint8List.fromList(stamped);
+    final sentAt = ByteData.sublistView(bytes).getUint32(0, Endian.big);
+    if ((_nowSeconds() - sentAt).abs() > sealFreshnessWindow.inSeconds) {
+      throw const SealedEnvelopeException('frame outside freshness window');
+    }
+    return Uint8List.sublistView(bytes, sealTimestampLength);
   }
 }

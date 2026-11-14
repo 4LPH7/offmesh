@@ -13,7 +13,7 @@ Windows PC. Requirement IDs match `REQUIREMENTS.md`, which is the single source.
 
 ## Phases
 
-- [ ] **Phase 1: Protocol core** - Close-out. Codecs and router are built and tested; key schedule, replay freshness, and fuzzing remain.
+- [x] **Phase 1: Protocol core** - Codecs, router, sealing, rotating IDs, receipts, key schedule, freshness, fuzzing. Built and tested in simulation.
 - [ ] **Phase 2: Sealed LAN chat on real devices** - The app uses what Phase 1 built: persistent identity, roster, sealed links, no static IDs on the wire.
 - [ ] **Phase 3: BLE link and background relay** - A BLE transport behind the existing `MeshTransport` interface, kept alive by a foreground service.
 - [ ] **Phase 4: Operator controls** - Radio posture switch, panic wipe, Relay Mode screen.
@@ -25,7 +25,7 @@ Windows PC. Requirement IDs match `REQUIREMENTS.md`, which is the single source.
 **Goal**: A pure-Dart protocol whose frames, once sealed, reveal nothing to an observer without the unit key, proven in simulation.
 **Depends on**: Nothing
 **Requirements**: REQ-01 to REQ-11
-**Status**: Plans 01-01 to 01-04 are implemented, tested, and committed (5534f72). 134 tests pass. Plan 01-05 remains.
+**Status**: Complete. All five plans implemented, tested, and committed. 147 tests pass. Sealing and rotating IDs are wired into the app in Phase 2.
 **Success Criteria** (what must be TRUE):
   1. A relay is skipped on every link that already delivered the same packet during the jitter window (per-link suppression; links are point-to-point).
   2. A sealed frame shows no header field in cleartext, fails to open under a wrong key or any flipped bit, and is rejected when older than the freshness window.
@@ -42,7 +42,7 @@ Plans:
 - [x] 01-02: Sealed envelope codec (as built: codec only, not wired)
 - [x] 01-03: Rotating IDs and roster resolver (as built: codec and resolver only, not wired)
 - [x] 01-04: Delivery receipts, explicit transport counter with replay window, 10-node simulator
-- [ ] 01-05: Key schedule (HKDF separation), freshness timestamp inside the seal, decoder fuzz test
+- [x] 01-05: Key schedule (HKDF separation), freshness timestamp inside the seal, decoder fuzz test (as built: epoch key chain left as an open decision)
 
 ### Phase 2: Sealed LAN chat on real devices
 **Goal**: Two phones and a PC chat over a hotspot with every frame sealed and no stable identifier visible to a packet capture.
@@ -121,7 +121,7 @@ Cut or parked so they stop reappearing. Each needs a stated reason to return.
 ## Open decisions
 
 1. **Relay key tier.** A sealed header means a relay must hold the seal key. In v1 a relay is a full unit member, so an unattended relay phone holds the unit secret and roster. A seal-only tier would reduce that. Decide before Phase 4 Relay Mode.
-2. **Epoch key chain.** Deriving seal keys from a hash chain and deleting old links would stop a captured phone from opening earlier recorded traffic. Decide in plan 01-05; it needs loosely synced clocks.
+2. **Epoch key chain.** Deriving seal keys from a hash chain and deleting old links would stop a captured phone from opening earlier recorded traffic. Not decided in 01-05; decide before Phase 2 plan 02-03, since it changes how the seal key is stored. It needs loosely synced clocks.
 3. **TTL.** Code is 7. Revisit only after Phase 3 range measurements; changing it needs a protocol version bump.
 4. **Relay-side unicast.** `docs/relay_mode.md` proposes it. Deferred until route entries come from sealed, authenticated frames (after Phase 2).
 
@@ -129,7 +129,7 @@ Cut or parked so they stop reappearing. Each needs a stated reason to return.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Protocol core | 4/5 | In progress | - |
+| 1. Protocol core | 5/5 | Complete | 2026-11-14 |
 | 2. Sealed LAN chat | 0/5 | Not started | - |
 | 3. BLE link and relay | 0/TBD | Not started | - |
 | 4. Operator controls | 0/TBD | Not started | - |

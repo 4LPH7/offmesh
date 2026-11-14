@@ -15,8 +15,8 @@ wired into the running app.
 - [ ] **REQ-07**: Rotating 8-byte discovery IDs from HMAC-SHA256 over public key and hourly epoch, with a roster resolver covering the previous, current, and next epoch.
 - [x] **REQ-08**: End-to-end delivery receipt carried as a Noise transport message; never acknowledged itself.
 - [x] **REQ-09**: Explicit transport counter and replay window so lost or reordered frames do not break a session.
-- [ ] **REQ-10**: Key schedule and freshness: seal key and ID key derived separately from the unit secret with HKDF; a timestamp inside the seal bounds replay of recorded frames.
-- [ ] **REQ-11**: Seeded fuzz test over every decoder (packet, sealed envelope, reassembly, receipt): 100,000 mutated inputs, no unhandled exception.
+- [x] **REQ-10**: Key schedule and freshness: seal key and ID key derived separately from the unit secret with HKDF; a timestamp inside the seal bounds replay of recorded frames.
+- [x] **REQ-11**: Seeded fuzz test over every decoder (packet, sealed envelope, reassembly, receipt, LAN framing): 100,000 mutated inputs, no unhandled exception.
 
 ## Phase 2: Sealed LAN chat on real devices
 - [ ] **REQ-12**: Persistent identity: static key created once and stored through the platform keystore.
@@ -52,7 +52,7 @@ wired into the running app.
 | REQ-06 | 1 | 01-02 | Built (5534f72), not wired |
 | REQ-07 | 1 | 01-03 | Built (5534f72), not wired |
 | REQ-08, REQ-09 | 1 | 01-04 | Done, committed (5534f72) |
-| REQ-10, REQ-11 | 1 | 01-05 | Not started |
+| REQ-10, REQ-11 | 1 | 01-05 | Done, committed |
 | REQ-12, REQ-13 | 2 | 02-01 | Not started |
 | REQ-14, REQ-17 | 2 | 02-02 | Not started |
 | REQ-15, REQ-16 | 2 | 02-03 | Not started |
