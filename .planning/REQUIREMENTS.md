@@ -63,7 +63,8 @@ wired into the running app.
 | REQ-26 to REQ-28 | 5 | TBD | Not started |
 
 ## Status notes (2026-11-15)
-- REQ-20 (dual role) is implemented in code but NOT verified on hardware; the GATT and advertising paths were reviewed, not run.
-- REQ-21 (foreground service, connectedDevice) is built: RelayForegroundService and RelayServicePlugin, started from Relay Mode. On Android 14+ the service needs a Bluetooth permission granted at runtime; the app has no runtime permission prompt yet, so start reports service_failed until one is granted.
-- REQ-25 (Relay Mode) is built with the foreground service. Not verified on a device.
+- REQ-20 (dual role) is built in code but NOT verified on hardware; the GATT and advertising paths were reviewed, not run.
+- REQ-21 (foreground service, connectedDevice) is built. Relay Mode asks for the Bluetooth runtime permissions first (PermissionsPlugin) and then starts the service. Notifications are not requested; the service still runs without them.
+- REQ-25 (Relay Mode) is built with the service and the permission prompt. Not verified on a device.
 - Device tests in docs/ble_spike.md, docs/operator_tests.md, docs/dtn_tests.md and docs/device_tests.md are NOT RUN.
+- The Windows build is blocked on this machine by the missing Visual Studio C++ ATL component (flutter_secure_storage_windows); it needs a Visual Studio install change.

@@ -3,21 +3,29 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../app/chat_controller.dart';
+import '../app/runtime_permissions.dart';
 import '../core/posture.dart';
 import '../transports/relay_service.dart';
 
 const Duration _refreshInterval = Duration(seconds: 1);
 
 /// Relay Mode: a black screen with forwarding counters. Entering it sets the posture to
-/// Normal (a silent relay forwards nothing) and starts the Android foreground service so
-/// the links survive the screen going off. Leaving stops the service.
+/// Normal (a silent relay forwards nothing), asks for the Bluetooth permissions, and then
+/// starts the Android foreground service so the links survive the screen going off.
+/// Leaving stops the service.
 class RelayScreen extends StatefulWidget {
-  const RelayScreen({super.key, required this.controller, this.service});
+  const RelayScreen({
+    super.key,
+    required this.controller,
+    this.service,
+    this.permissions,
+  });
 
   final ChatController controller;
 
-  /// Null in the app; tests pass a fake channel.
+  /// Null in the app; tests pass fake channels.
   final RelayService? service;
+  final RuntimePermissions? permissions;
 
   @override
   State<RelayScreen> createState() => _RelayScreenState();
@@ -26,17 +34,38 @@ class RelayScreen extends StatefulWidget {
 class _RelayScreenState extends State<RelayScreen> {
   Timer? _refresh;
   late final RelayService _service = widget.service ?? RelayService();
+  late final RuntimePermissions _permissions =
+      widget.permissions ?? RuntimePermissions();
+  bool _permissionDenied = false;
 
   @override
   void initState() {
     super.initState();
     unawaited(widget.controller.setPosture(Posture.normal));
-    unawaited(_service.start().then((_) => _refreshed()));
+    unawaited(_startRelay());
     _refresh = Timer.periodic(_refreshInterval, (_) => _refreshed());
+  }
+
+  /// Permission first: on Android 14+ the connectedDevice service cannot start without a
+  /// granted Bluetooth permission, so asking here avoids a confusing failure.
+  Future<void> _startRelay() async {
+    final granted = await _permissions.request();
+    if (!mounted) return;
+    _permissionDenied = !granted;
+    if (granted) await _service.start();
+    _refreshed();
   }
 
   void _refreshed() {
     if (mounted) setState(() {});
+  }
+
+  String get _serviceStatus {
+    if (_service.running) return 'Background service: running';
+    if (_permissionDenied) {
+      return 'Background service: Bluetooth permission denied';
+    }
+    return 'Background service: not running (${_service.lastError ?? 'starting'})';
   }
 
   @override
@@ -71,9 +100,7 @@ class _RelayScreenState extends State<RelayScreen> {
               Text('Links: ${lan.linkCount}', style: style),
               const SizedBox(height: 8),
               Text(
-                _service.running
-                    ? 'Background service: running'
-                    : 'Background service: not running (${_service.lastError ?? 'starting'})',
+                _serviceStatus,
                 key: const Key('relay-service-status'),
                 style: const TextStyle(color: Colors.white54, fontSize: 14),
               ),
