@@ -26,10 +26,14 @@ by unit tests only (`test/core/crypto/rotating_id_test.dart` and the LAN tests).
 1. Two Android phones (A and B) with a debug build installed:
    `flutter build apk --debug` (needs `ANDROID_NDK_HOME`), then
    `adb install -r build/app/outputs/flutter-apk/app-debug.apk` on each.
-2. A Windows PC with the app built by `flutter build windows` or `flutter run -d windows`.
-   This build needs the Visual Studio "C++ ATL for latest build tools" component
-   (`flutter_secure_storage_windows`). It does not build on the development machine used
-   so far, so the PC build must come from a machine that has that component.
+2. A Windows PC with the app built by `flutter build windows --debug` or `flutter run -d windows`.
+   On this development machine the existing CMake cache points at missing MSVC 14.51, while
+   MSVC 14.52 and ATL headers are installed. To regenerate that local build cache, open PowerShell
+   in the repo root and run `flutter clean`, `flutter pub get`, then `flutter build windows --debug`.
+   `flutter clean` deletes generated build outputs; they are recreated by the following commands.
+   This clean Windows build has not been run here. If it still fails, run `flutter doctor -v` and
+   confirm Visual Studio has Desktop development with C++, the MSVC x64/x86 tools, CMake tools,
+   and ATL; then retry `flutter build windows --debug`.
 3. Wireshark with Npcap on the PC.
 4. Windows Firewall allows the OffMesh app on the network profile the hotspot gets (a new
    hotspot network is often classed as Public). Without that, inbound TCP links and UDP
@@ -159,10 +163,11 @@ Substitute the values recorded in steps 8, 16 and 26:
 | C5 | `frame contains ID_A \|\| frame contains ID_B \|\| frame contains ID_PC` | No packets | No static PeerID in cleartext, in any beacon, hello or frame |
 | C6 | `frame contains "zqx7"` | No packets | No message text in cleartext |
 
-C7, beacon payloads never repeat. In a terminal on the PC:
+C7, beacon payloads never repeat. In PowerShell on the PC:
 
-```
-tshark -r phase2_capture.pcapng -Y "udp.port == 47999" -T fields -e udp.payload | sort | uniq -d
+```powershell
+$tsharkPayloads = tshark -r .\phase2_capture.pcapng -Y 'udp.port == 47999' -T fields -e udp.payload
+$tsharkPayloads | Group-Object | Where-Object Count -gt 1 | Select-Object Name, Count
 ```
 
 Expected output: empty. Each beacon has a fresh random nonce, so equal payloads would mean

@@ -106,6 +106,34 @@ void main() {
       ]);
     });
 
+    test('routes an established send over the learned next hop only', () async {
+      final h = await _Harness.build(4, const [(0, 1), (0, 2), (1, 3), (2, 3)]);
+      await h.nodes[0].sendText(h.nodes[3].peerId, _utf8('first'));
+      await pumpEventQueue();
+
+      final packetId = await h.nodes[0].sendText(
+        h.nodes[3].peerId,
+        _utf8('second'),
+      );
+      await pumpEventQueue();
+
+      final firstHopCopies = h.topology.network.frames
+          .map(Packet.decode)
+          .where(
+            (packet) =>
+                packet.type == PacketType.noiseTransport &&
+                packet.packetId == packetId &&
+                packet.senderId.hex == h.nodes[0].peerId.hex &&
+                packet.ttl == maxTtl,
+          )
+          .length;
+      expect(firstHopCopies, 1);
+      expect(h.inbox[3].map((message) => utf8.decode(message.plaintext)), [
+        'first',
+        'second',
+      ]);
+    });
+
     test('relays see only ciphertext, never the plaintext', () async {
       final h = await _Harness.build(5, line);
       final secret = _utf8('TOP-SECRET-MARKER-7431');

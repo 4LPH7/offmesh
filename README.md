@@ -34,8 +34,12 @@ Works today over Wi-Fi or a phone hotspot:
   or outside the roster, cannot link. A link that goes silent for 30 seconds is closed
   (healthy links send keepalives). Manual IP:port connect is still available.
 
-Built and tested, but not yet used by the running app: a reverse-path table for unicast
-return traffic (`MeshRouter.originateTo`). Receipts are flooded instead.
+The reverse-path table now routes established encrypted messages over a learned first hop; handshakes without a route and receipts still flood. The router floods if the route is unknown or its send fails.
+
+## Prototypes not connected to chat
+
+- **Bluetooth:** the BLE codec, link, and Android radio are built and fake-tested; app discovery/peer management and posture gating are not wired. The two-phone spike is NOT RUN.
+- **Store-and-forward:** Noise K, custody envelopes, and the bounded memory store are built and tested; the app does not own or exchange them yet.
 
 ## Limits
 
@@ -56,20 +60,18 @@ return traffic (`MeshRouter.originateTo`). Receipts are flooded instead.
 - Frame lengths and timing stay visible on the wire.
 - **"Delivered" means the recipient's phone decrypted the message**, not that anyone read
   it. Messages and their marks are memory-only and are lost on restart; there is no resend.
-- **No Bluetooth, no voice, no store-and-forward.**
+- **No BLE or store-and-forward messaging in the running app yet.** Their code components are not connected to contacts and message flow. Voice calls are not implemented.
 - **A transmitting phone can always be located by radio.** No app changes that. See
   [docs/mission_plan.md](docs/mission_plan.md) for the threat model.
 
 ## Planned
 
-Five phases; details, success criteria, and device tests are in
-[.planning/ROADMAP.md](.planning/ROADMAP.md).
+Phase 1 is complete in simulation. Phase 2 software is built; its phone/PC capture test is NOT RUN. Phase 3–5 implementation status and device gates are in [.planning/ROADMAP.md](.planning/ROADMAP.md).
 
-1. Protocol core close-out: key schedule, replay freshness, decoder fuzzing.
-2. Sealed LAN chat on real devices: persistent identity, roster by QR, no static IDs on the wire.
-3. BLE link and background relay.
-4. Operator controls: radio posture switch, panic wipe, Relay Mode.
-5. Store-and-forward for offline recipients.
+1. Phase 2 device acceptance.
+2. Phase 3 BLE spike, then app wiring and radio posture gates.
+3. Phase 4 phone acceptance, including Silent and screen-off relay behavior.
+4. Phase 5 app integration and store-and-forward device acceptance.
 
 Not planned: voice calls, live push-to-talk, Wi-Fi Direct, mDNS, iOS, external radios.
 
@@ -98,3 +100,10 @@ The APK is written to `build/app/outputs/flutter-apk/app-debug.apk`.
 6. Turn off mobile data to confirm nothing leaves the local network.
 
 Multi-hop: add a third phone C to the unit, link it to B only, and message C from A.
+
+## Manual acceptance runbooks
+
+- [Phase 2 LAN and capture test](docs/device_tests.md): detailed; needs two phones, Wireshark and a Windows build. The cached Windows CMake path on this machine needs reconfiguration.
+- [Phase 3 BLE spike](docs/ble_spike.md): NOT RUN; current APK lacks BLE app controls, so a diagnostic harness or BLE integration is required first.
+- [Phase 4 operator tests](docs/operator_tests.md): Silent, Quiet, panic wipe, Relay Mode, and foreground-service steps; BLE posture is not testable until BLE is wired.
+- [Phase 5 store-and-forward test](docs/dtn_tests.md): detailed but blocked until the app owns and exchanges custody envelopes.

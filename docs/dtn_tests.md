@@ -1,47 +1,86 @@
 # Phase 5 device test: store-and-forward
 
-Status: **NOT RUN**. Nothing here has been verified on hardware. The DTN code
-(lib/core/dtn/, lib/core/crypto/noise_k.dart) is tested with unit tests only. It is not yet wired
-into the mesh, the sealed link or the app, and the frame-size open decision in
-.planning/phases/05-dtn/05-01-PLAN.md is unresolved. This procedure cannot pass until both are done.
+Status: **NOT RUN / NOT EXECUTABLE IN THE CURRENT BUILD.** Nothing here has been verified on hardware. Noise K, custody envelopes and `EnvelopeStore` have unit tests, but no app flow owns them or exchanges envelopes. The current UI has no store-and-forward send action or custody status view. This procedure becomes runnable after Phase 5 app integration is implemented and a debug build exposes enough state to confirm custody transfer.
 
 ## Requirement under test
 
 ROADMAP Phase 5, device test: phone A sends to the PC while the PC is off the network. Phone B meets
 A over BLE, then joins the PC's LAN. The PC receives the message once.
 
-## Equipment
+## Prerequisites and equipment
 
-- Phone A (sender), Android, debug build from this branch.
-- Phone B (carrier), Android, same build.
-- Windows PC (recipient) on the LAN, with the unit roster provisioned on all three devices.
-- A packet capture tool on the LAN (for the cleartext check below).
+Do not start the hardware test until all of these are true:
+
+- A build exposes an explicit store-and-forward send action for a roster contact that is not directly reachable.
+- A build exchanges held and delivered IDs on contact, stores non-recipient envelopes, opens recipient envelopes once, and clears the store on panic wipe.
+- A debug view or log must show the envelope ID, held/delivered state, and peer that exchanged it, and provide a way to clear only the test custody store. The current app has none of these controls.
+- The BLE phone spike is GO and BLE app wiring is complete; the Phase 2 LAN acceptance test passes.
+
+Equipment after those code gates pass:
+
+- Phone A (sender), Android; phone B (carrier), Android; Windows PC (recipient).
+- The same unit roster provisioned on all three devices.
+- The unit code, each device's PeerID/name, device models, OS versions, APK version and commit hash recorded.
+- A packet capture tool on the PC's LAN interface (Wireshark recommended).
 
 ## Procedure
 
-1. Start the app on A, B and the PC. Confirm each sees the others from the roster.
-2. Take the PC off the LAN.
-3. On A, send one text to the PC.
-4. Bring B within Bluetooth range of A. Let the ID exchange finish.
-5. Move B onto the PC's LAN.
-6. Wait up to 5 minutes for the PC to show the message.
-7. Keep B on the LAN for another 5 minutes. Confirm the PC still shows the message only once.
-8. Capture the LAN traffic during steps 5 to 7. Confirm no readable message text, sender name or
-   recipient name appears in the capture.
+1. Record date/time, commit hash, app build, device model/OS/API, unit roster names and
+   PeerIDs. Confirm clocks agree within 10 minutes.
+2. Provision A, B and the PC into the same unit. Confirm fingerprints by eye using the Phase 2
+   procedure. Set all devices to Normal and confirm LAN and BLE links are available.
+3. Clear only the test custody stores using the app's debug control. Record that each store is
+   empty; do not panic-wipe identities between runs.
+4. On the PC, disconnect Wi-Fi or leave the hotspot so its PeerID is unreachable. Verify the
+   PC is absent from A's active links.
+5. On A, select the PC contact, choose **Store and forward**, and send the unique marker
+   `dtn-<date>-A-PC-01`. Record the new envelope ID, expiry and initial copy budget. Confirm
+   A reports it held or queued for custody and does not claim recipient delivery.
+6. Bring B within BLE range of A. Wait for the authenticated contact exchange. Record the
+   exchanged held-ID lists and confirm B receives the envelope with a valid reduced copy
+   budget. Confirm its decrypted message text is still unavailable on B.
+7. On B, leave the contact exchange view open long enough to record the held envelope ID, then
+   take B out of A's range.
+8. Rejoin the PC to the LAN with B. Confirm the PC appears as a current neighbour and complete
+   the custody exchange. Record the received envelope ID and that the PC opens it as addressed
+   to itself.
+9. Confirm the PC displays the exact marker once. Confirm A changes the message to Delivered
+   only after a recipient delivery acknowledgement; B must never display the message text.
+10. Keep B and the PC in contact for 5 more minutes. Trigger another exchange. The PC must
+    still show one copy, and B must not resend an ID the PC advertised.
+11. Start Wireshark before step 8 and capture through step 10. Filter for the marker text,
+    sender name and recipient name; expect no cleartext matches. Save the capture with the
+    run record.
+12. Repeat with a second unique marker. Confirm expiry, copy-split behavior and delivery-once
+    behavior do not depend on stale IDs from the first run.
 
 ## Pass criteria
 
-- The PC shows the message once, with its text intact (step 6 and step 7).
-- Nothing in the LAN capture is readable (step 8).
+- A stores the message without claiming it is delivered; B carries only the opaque envelope.
+- The PC opens the matching envelope and displays the exact text once.
+- A receives a recipient delivery acknowledgement; a second exchange does not redeliver.
+- The LAN capture contains no message text, sender name or recipient name in cleartext.
+- The run used a BLE implementation that passed the Phase 3 spike; no unit-test-only result counts as a device pass.
 
 ## Record on the run
 
-Date, commit hash, device models, and the result of each step. If a step fails, note whether B held
-the envelope (ID exchange), and whether the PC refused it on decode or on K open.
+Date/time, commit hash, APK version, device models/OS/API, unit PeerIDs, marker, envelope ID,
+initial and transferred copy budgets, each exchange timestamp, recipient delivery count, capture
+file name, and pass/fail for every step. If a step fails, record whether B held the envelope, the
+ID lists exchanged, and whether the PC rejected envelope decode or Noise K open. Never put unit
+secrets or private keys in the log.
+
+| Check | Expected | Observed | Pass/Fail |
+|---|---|---|---|
+| A creates envelope while PC offline | One custody ID; no delivered mark | | |
+| B receives over BLE | Same ID, copy budget reduced; plaintext unavailable | | |
+| PC receives on LAN | Exact text once; recipient acknowledgment | | |
+| Repeat contact | No second delivery | | |
+| LAN capture | No marker, sender name or recipient name in cleartext | | |
 
 ## Result
 
-NOT RUN.
+NOT RUN — blocked on Phase 5 app integration and Phase 3 BLE wiring. Do not mark the device gate passed from the current APK.
 
 ## Known residual risk: copy budget
 

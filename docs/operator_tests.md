@@ -1,9 +1,8 @@
 # Operator controls: manual device tests
 
-Status: NOT RUN. No device has been tested. This build has no Bluetooth test partner and no
-capture rig. Code is verified only by unit, widget and fake-transport tests and the debug APK
-build (`flutter test`, `flutter build apk --debug`). The steps below are the procedure to
-run later; record each result with date, device model, app build and the PC capture file.
+Status: NOT RUN. No device has been tested. Automated checks pass (`flutter test`,
+`flutter analyze`, format check, and `flutter build apk --debug`). The steps below are the
+manual procedure; record date, device model/API level, app build and PC capture file.
 
 Covers REQ-23 (posture), REQ-24 (panic wipe), REQ-25 (Relay Mode). Phase 4 device test is in
 `.planning/ROADMAP.md`.
@@ -13,11 +12,10 @@ Covers REQ-23 (posture), REQ-24 (panic wipe), REQ-25 (Relay Mode). Phase 4 devic
 - Phone A and phone B, both provisioned into the same unit, on the same hotspot.
 - A Windows PC on the hotspot, running Wireshark capturing UDP port 47999 and TCP traffic on
   the hotspot interface.
-- A BLE scanner app on phone A (for example nRF Connect). Note: no code in `lib/` calls
-  `startAdvertising`, `startScan` or `connect` on a BLE radio, so the app emits no BLE in any
-  posture today. The BLE check in Test 1 therefore cannot fail yet and proves nothing about
-  the posture. It becomes meaningful only after BLE is wired to the posture (see
-  `.planning/phases/04-operator/04-01-PLAN.md`). Do not record it as a pass.
+- A BLE scanner app on phone A (for example nRF Connect). The current app does not construct
+  `BlePlatformRadio`, so it emits no BLE in any posture. Test 1's BLE observation is a
+  wiring-gap check, not proof that Silent gates BLE; do not record it as a posture pass.
+- Android Debug Bridge (`adb`) on the PC for the foreground-service check.
 
 ## Test 1: Silent on phone B for 5 minutes (roadmap device test)
 
@@ -26,9 +24,9 @@ Covers REQ-23 (posture), REQ-24 (panic wipe), REQ-25 (Relay Mode). Phase 4 devic
 3. Start the Wireshark capture on the PC at the same time as the switch. Run it 5 minutes.
 4. Expected: no UDP datagrams from B's address to 255.255.255.255:47999 or to any port; no TCP
    SYN from or to B; no frames from B on the capture.
-5. On A, watch the BLE scanner for B's advertisements. Expected: none. As built, this holds
-   trivially because the app never advertises over BLE; it is not evidence of the posture
-   until BLE is wired. Record the result with that caveat.
+5. On A, watch the BLE scanner for B's advertisements. None are expected because BLE is not
+   app-wired. Record `NOT APPLICABLE — BLE manager absent`, not Pass; rerun after Phase 3
+   integration.
 6. On B, try to send a message to A. Expected: the error "Silent: nothing is sent" and no
    message in the thread.
 
@@ -63,14 +61,24 @@ Covers REQ-23 (posture), REQ-24 (panic wipe), REQ-25 (Relay Mode). Phase 4 devic
 6. Re-join B to the unit by its new identity code, if that test is needed. Record whether the
    old keys remain anywhere visible; they should not.
 
-## Test 5: Relay Mode
+## Test 5: Relay Mode and foreground service
 
-1. On B, in Normal, tap Relay Mode. Expected: a black screen with Forwarded, Suppressed and
-   Links counters, and the posture is Normal.
-2. Send messages from A through B to the PC. Expected: Forwarded counts rise.
-3. Tap Leave. Expected: back on Home.
-4. Known gap: the foreground service is not built. Lock the screen on B for 5 minutes and
-   check whether B still relays. Expect it may stop. Record the result as a finding.
+1. On B, in Normal, tap Relay Mode. Grant the Android Nearby devices permissions if prompted.
+   Expected: a black screen with Forwarded, Suppressed and Links counters, Normal posture,
+   and `Background service: running`.
+2. If permission is denied, record the displayed error, grant permission in Android Settings,
+   leave Relay Mode and enter it again. Confirm the service starts only after permission is
+   granted.
+3. Send LAN messages from A through B to the PC. Expected: Forwarded rises when B relays;
+   Links reflects the current LAN links.
+4. Lock B's screen for 30 minutes. Keep A and the PC sending one marked message per minute
+   through B. Record delivered count, drop times and whether the foreground notification
+   remains visible. Do not use this to claim BLE screen-off behavior; BLE is not wired.
+5. Unlock B. Confirm Relay Mode still shows the service as running and traffic resumes.
+   Optional PC check: run `adb shell dumpsys activity services me.offmesh.offmesh` and save
+   the service section with the test result.
+6. Tap Leave. Expected: Home returns and the relay notification/service stops within a few
+   seconds. Confirm with the UI status or `dumpsys`.
 
 ## Results log
 
@@ -80,4 +88,5 @@ Covers REQ-23 (posture), REQ-24 (panic wipe), REQ-25 (Relay Mode). Phase 4 devic
 | 2 Quiet and burst | | | NOT RUN | |
 | 3 Silent restart | | | NOT RUN | |
 | 4 Panic wipe | | | NOT RUN | |
-| 5 Relay Mode | | | NOT RUN | |
+| 5 Relay Mode and service | | | NOT RUN | |
+| 5 screen-off LAN relay, 30 min | | | NOT RUN | |

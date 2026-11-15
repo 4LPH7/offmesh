@@ -341,7 +341,7 @@ class MeshNode {
       data: ciphertext,
     );
     for (final fragment in fragments) {
-      await _router.originate(fragment);
+      await _router.originateTo(fragment);
     }
   });
 

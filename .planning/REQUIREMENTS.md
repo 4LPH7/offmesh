@@ -10,9 +10,9 @@ wired into the running app.
 - [x] **REQ-02**: Message fragmentation and bounded reassembly (32 in-flight messages).
 - [x] **REQ-03**: Seen-cache deduplication keyed on `(SenderID, PacketID, FragIdx)`, 2048 entries, 300 s.
 - [x] **REQ-04**: Noise XX handshake (`Noise_XX_25519_ChaChaPoly_SHA256`) with mutual authentication and glare tie-break.
-- [ ] **REQ-05**: Per-link flood suppression: a relay is skipped on any link that already delivered the same packet during the jitter window. Reverse-path table used for the originator's first hop.
-- [ ] **REQ-06**: Sealed envelope codec: whole frame encrypted under a 32-byte key with ChaCha20-Poly1305, random nonce, domain label.
-- [ ] **REQ-07**: Rotating 8-byte discovery IDs from HMAC-SHA256 over public key and hourly epoch, with a roster resolver covering the previous, current, and next epoch.
+- [x] **REQ-05**: Per-link flood suppression: a relay is skipped on any link that already delivered the same packet during the jitter window. Reverse-path table used for the originator's first hop.
+- [x] **REQ-06**: Sealed envelope codec: whole frame encrypted under a 32-byte key with ChaCha20-Poly1305, random nonce, domain label.
+- [x] **REQ-07**: Rotating 8-byte discovery IDs from HMAC-SHA256 over public key and hourly epoch, with a roster resolver covering the previous, current, and next epoch.
 - [x] **REQ-08**: End-to-end delivery receipt carried as a Noise transport message; never acknowledged itself.
 - [x] **REQ-09**: Explicit transport counter and replay window so lost or reordered frames do not break a session.
 - [x] **REQ-10**: Key schedule and freshness: seal key and ID key derived separately from the unit secret with HKDF; a timestamp inside the seal bounds replay of recorded frames.
@@ -20,21 +20,21 @@ wired into the running app.
 
 ## Phase 2: Sealed LAN chat on real devices
 - [x] **REQ-12**: Persistent identity: static key created once and stored through the platform keystore.
-- [ ] **REQ-13**: Unit secret and roster stored at rest through the same store; app refuses to link when unprovisioned.
-- [ ] **REQ-14**: Roster provisioning by one static QR code (Windows: paste or file).
-- [ ] **REQ-15**: Every LAN frame sealed, including the link hello and the UDP beacon.
-- [ ] **REQ-16**: No static identifier on the wire: beacon and hello carry rotating IDs; static PeerIDs appear only inside sealed frames.
-- [ ] **REQ-17**: Key fingerprint shown per contact for comparison by eye.
-- [ ] **REQ-18**: Delivery receipt shown in the chat thread.
+- [x] **REQ-13**: Unit secret and roster stored at rest through the same store; app refuses to link when unprovisioned.
+- [x] **REQ-14**: Roster provisioning by one static QR code (Windows: paste or file).
+- [x] **REQ-15**: Every LAN frame sealed, including the link hello and the UDP beacon.
+- [x] **REQ-16**: No static identifier on the wire: beacon and hello carry rotating IDs; static PeerIDs appear only inside sealed frames.
+- [x] **REQ-17**: Key fingerprint shown per contact for comparison by eye.
+- [x] **REQ-18**: Delivery receipt shown in the chat thread.
 
 ## Phase 3: BLE link and background relay
 - [x] **REQ-19**: `BleLink implements MeshTransport` with link-layer segmentation that works at ATT MTU 23.
 - [ ] **REQ-20**: Dual role: advertise, scan, GATT server, and GATT client at the same time, with Android 12+ Bluetooth permissions.
-- [x] **REQ-21**: Typed foreground service (`connectedDevice`) that keeps links alive with the screen off.
-- [x] **REQ-22**: BLE advertisements carry a rotating ID and no static identifier.
+- [ ] **REQ-21**: Typed foreground service (`connectedDevice`) that keeps links alive with the screen off; service builds, screen-off behavior not device-verified and BLE is not yet wired.
+- [ ] **REQ-22**: BLE advertisements carry a rotating ID and no static identifier; implementation is not app-wired or device-verified.
 
 ## Phase 4: Operator controls
-- [x] **REQ-23**: Radio posture switch with per-transport definitions: Silent, Quiet, Normal.
+- [ ] **REQ-23**: Radio posture switch with per-transport definitions: Silent, Quiet, Normal; LAN is gated, BLE is not app-wired.
 - [x] **REQ-24**: Panic wipe as key deletion from the keystore plus memory clear.
 - [x] **REQ-25**: Relay Mode screen: black display, counters, foreground service on.
 
@@ -47,24 +47,27 @@ wired into the running app.
 
 | REQ | Phase | Plan | Status |
 |-----|-------|------|--------|
-| REQ-01 to REQ-04 | 1 | (pre-roadmap) | Done, committed |
-| REQ-05 | 1 | 01-01 | Built (5534f72); suppression live, reverse path unused by the app |
-| REQ-06 | 1 | 01-02 | Built (5534f72), not wired |
-| REQ-07 | 1 | 01-03 | Built (5534f72), not wired |
-| REQ-08, REQ-09 | 1 | 01-04 | Done, committed (5534f72) |
-| REQ-10, REQ-11 | 1 | 01-05 | Done, committed |
-| REQ-12 | 2 | 02-01 | Done (Android verified by build; device restart check pending) |
-| REQ-13 | 2 | 02-02 | Not started |
-| REQ-14, REQ-17 | 2 | 02-02 | Not started |
-| REQ-15, REQ-16 | 2 | 02-03 | Not started |
-| REQ-18 | 2 | 02-04 | Not started |
-| REQ-19 to REQ-22 | 3 | 03-00 spike first | Not started |
-| REQ-23 to REQ-25 | 4 | TBD | Not started |
-| REQ-26 to REQ-28 | 5 | TBD | Not started |
+| REQ-01 to REQ-04 | 1 | pre-roadmap | Done, committed and tested |
+| REQ-05 | 1 | 01-01 | Done: established encrypted sends use the learned first hop; missing/failed routes flood |
+| REQ-06 | 1 | 01-02 | Built, codec tests pass; app framing does not use this codec |
+| REQ-07 | 1 | 01-03 | Built, resolver and epoch tests pass |
+| REQ-08, REQ-09 | 1 | 01-04 | Done, committed and tested |
+| REQ-10, REQ-11 | 1 | 01-05 | Done, committed and tested |
+| REQ-12 | 2 | 02-01 | Implemented; device restart check NOT RUN |
+| REQ-13 | 2 | 02-02 | Implemented and automated-tested; device check NOT RUN |
+| REQ-14, REQ-17 | 2 | 02-02 | Implemented and automated-tested; device check NOT RUN |
+| REQ-15, REQ-16 | 2 | 02-03 | Implemented and automated-tested; capture check NOT RUN |
+| REQ-18 | 2 | 02-04 | Implemented and automated-tested; device check NOT RUN |
+| REQ-19 | 3 | 03-01 | Built and fake-tested; real radio NOT RUN |
+| REQ-20, REQ-22 | 3 | 03-00, 03-01 | Radio code exists; app wiring and hardware verification incomplete |
+| REQ-21 | 3 | 04-01 | Foreground service builds; screen-off behavior NOT RUN |
+| REQ-23 | 4 | 04-01 | LAN posture gates tested; BLE gate missing |
+| REQ-24, REQ-25 | 4 | 04-01 | Implemented and automated-tested; device checks NOT RUN |
+| REQ-26 to REQ-28 | 5 | 05-01 | Built and tested as primitives; no app contact flow |
 
 ## Status notes (2026-11-15)
-- REQ-20 (dual role) is built in code but NOT verified on hardware; the GATT and advertising paths were reviewed, not run.
-- REQ-21 (foreground service, connectedDevice) is built. Relay Mode asks for the Bluetooth runtime permissions first (PermissionsPlugin) and then starts the service. Notifications are not requested; the service still runs without them.
-- REQ-25 (Relay Mode) is built with the service and the permission prompt. Not verified on a device.
-- Device tests in docs/ble_spike.md, docs/operator_tests.md, docs/dtn_tests.md and docs/device_tests.md are NOT RUN.
-- The Windows build is blocked on this machine by the missing Visual Studio C++ ATL component (flutter_secure_storage_windows); it needs a Visual Studio install change.
+- Verified in this run: `flutter test` (352 passed), `flutter analyze` (clean), format check (clean), and `flutter build apk --debug` (success).
+- No Android device is attached; `flutter devices` lists Windows, Chrome and Edge. The BLE spike and all phone procedures are NOT RUN.
+- BLE radio and foreground-service code compile into the APK, but the BLE radio is not attached to app startup; do not count this as dual-role or screen-off verification.
+- Phase 5 Noise K and envelope/store code pass automated tests but have no app contact flow.
+- `flutter build windows --debug` failed because cached CMake points to missing MSVC 14.51 `cl.exe`; installed MSVC 14.52 and ATL headers exist. A fresh build configuration is still unverified.

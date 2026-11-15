@@ -4,9 +4,9 @@ status: executing
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 10
-  completed_plans: 6
-  percent: 60
+  total_plans: 14
+  completed_plans: 13
+  percent: 93
 ---
 
 # Project State
@@ -17,28 +17,30 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 See: docs/mission_plan.md (threat model, limits, design decisions)
 
 **Core value:** Offline, end-to-end encrypted phone-to-phone messaging for a pre-provisioned unit, with sealed frames and operator-controlled emissions.
-**Current focus:** Phase 2. Next: plan 02-02 (roster and QR). Decide the epoch key chain before 02-03.
+**Current focus:** Phase 2 software is complete; its real-device acceptance test is still NOT RUN. Phase 3's two-phone BLE spike is the next hardware gate.
 
 ## Current Position
 
 Phase: 2 of 5 (Sealed LAN chat on real devices)
-Plan: 1 of 5 in current phase
-Status: Phase 1 complete (all five plans committed). Phase 2 not started.
-Last activity: 2026-11-14 — Plan 02-01 built: identity persists via flutter_secure_storage; Android auto-backup and device transfer disabled for its prefs.
+Plan: 5 of 5 (device procedure written; execution NOT RUN)
+Status: Phase 1 is complete. Phase 2 implementation and automated validation pass; device acceptance remains open. Phases 3–5 have partial software implementation, described in ROADMAP.md.
+Last activity: 2026-11-15 — 352 tests pass; analyzer, format check and Android debug APK build pass; Windows build hits a stale CMake MSVC path; no Android device is available.
 
 ## Performance Metrics
 
-- Total tests: 158 passing (`flutter test`), includes the 10-node simulator and a 100,000-input decoder fuzz test.
+- Tests: 352 passing (`flutter test`).
 - Lints: clean (`flutter analyze`).
-- Debug APK builds (`flutter build apk --debug`); NDK path set in `android/local.properties`.
+- Format check: clean (`dart format --output=none --set-exit-if-changed lib test`).
+- Android debug APK builds (`flutter build apk --debug`); NDK path set in `android/local.properties`.
+- Available targets: Windows, Chrome and Edge only. Android device checks cannot run here.
 
-## What is built but not wired
+## Remaining software gaps and device gates
 
-- `SealedEnvelope`, `RosterResolver` and `UnitKeys` have no callers outside their tests.
-- The reverse-path table is used only by `MeshRouter.originateTo`, which `MeshNode` does not call; all traffic still floods.
-- Android builds need `ANDROID_NDK_HOME=D:\Android\ndk-r28c` (the SDK copy at `ndk/28.2.13676358` is an empty partial install). Windows build needs the Visual Studio "C++ ATL for latest build tools" component for flutter_secure_storage.
-- LAN beacon and link hello still send a static PeerID in cleartext.
-- Delivery receipts are not shown in the UI.
+- `BleLink` and `BlePlatformRadio` have fake-backed tests and compile into the APK, but bootstrap does not attach them to `MeshNode`; BLE posture gating and peer management are absent.
+- Noise K, custody envelope codecs and `EnvelopeStore` are tested primitives; no app contact flow owns or exchanges them.
+- Established encrypted MeshNode sends use the learned reverse path; initial handshakes and receipts intentionally flood.
+- Foreground Relay service and operator UI are implemented, but screen-off and radio behavior still need phone validation.
+- Windows build is unverified from a clean configuration: cached CMake points at absent MSVC 14.51 `cl.exe`; installed MSVC 14.52 and ATL headers are present.
 
 ## Accumulated Context
 
@@ -57,6 +59,6 @@ See "Open decisions" in ROADMAP.md: relay key tier, epoch key chain, TTL, relay-
 
 ### Known gaps outside the roadmap files
 
-- README rewritten 2026-11-14 into Implemented, Limits, and Planned; keep it in step as phases land.
+- README links the manual runbooks; BLE and DTN remain documented as prototypes not connected to chat.
 - Manual two-instance Windows GUI check has not been confirmed.
 - `Python/` in the repo root is untracked and must not be committed.
