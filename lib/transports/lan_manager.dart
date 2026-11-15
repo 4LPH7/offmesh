@@ -112,6 +112,10 @@ class LanManager {
   /// no UDP socket behind.
   bool get beaconsRunning => _beaconListener != null;
 
+  /// Why beacons did not start (for example the UDP port is in use), or null.
+  String? _beaconError;
+  String? get beaconError => _beaconError;
+
   /// Listens for links on an ephemeral TCP port and returns that port. Does nothing and
   /// returns the current port when already listening. Refused in Silent.
   Future<int> start() async {
@@ -128,6 +132,11 @@ class LanManager {
       await server.close();
       throw StateError('Silent: not listening');
     }
+    // A start() that ran during this bind already set up a listener: keep that one.
+    if (_server != null) {
+      await server.close();
+      return _server!.port;
+    }
     _server = server;
     server.listen((socket) {
       // Sockets are unauthenticated until their hello arrives. Refuse new ones past the
@@ -138,7 +147,15 @@ class LanManager {
       }
       unawaited(_adopt(socket, isDialer: false));
     });
-    if (beaconPort > 0) await _startBeacons(generation);
+    if (beaconPort > 0) {
+      // Best effort: a busy UDP port must not stop the app from listening for TCP links.
+      try {
+        await _startBeacons(generation);
+        _beaconError = null;
+      } on Exception catch (error) {
+        _beaconError = error.runtimeType.toString();
+      }
+    }
     // Silent or a stop during the beacon binds. stop() already took the server. Only
     // a same-generation Silent still needs a stop() here, and a newer generation owns
     // whatever it set up, so this never touches it.
@@ -159,7 +176,11 @@ class LanManager {
     if (posture.current == Posture.silent) {
       throw StateError('Silent: not dialing');
     }
-    await _dial(host, port);
+    if (!await _dial(host, port)) {
+      throw StateError(
+        'not linked: not a roster member, already linked, or this phone',
+      );
+    }
   }
 
   /// Closes every link, including those still in their handshake, and abandons dials

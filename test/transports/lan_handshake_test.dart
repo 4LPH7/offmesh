@@ -202,7 +202,9 @@ void main() {
       linkIdleTimeout: idle,
     );
     final bob = await listeningBob(linkIdleTimeout: idle);
-    await alice.lan.connect('127.0.0.1', await bob.lan.start());
+    await alice.lan
+        .connect('127.0.0.1', await bob.lan.start())
+        .catchError((_) {});
     await waitFor(() => bob.lan.linkCount == 1);
 
     await Future<void>.delayed(idle * 3);
@@ -218,7 +220,7 @@ void main() {
     await squatter.handshake(await idOf(aliceId));
     await waitFor(() => bob.lan.linkCount == 1);
 
-    await alice.lan.connect('127.0.0.1', port);
+    await alice.lan.connect('127.0.0.1', port).catchError((_) {});
     await squatter.done.timeout(_rejectWithin);
     await waitFor(() => alice.lan.linkCount == 1);
     await alice.node.sendText(
@@ -244,8 +246,8 @@ void main() {
       final bobPort = await bob.lan.start();
 
       await Future.wait([
-        alice.lan.connect('127.0.0.1', bobPort),
-        bob.lan.connect('127.0.0.1', alicePort),
+        alice.lan.connect('127.0.0.1', bobPort).catchError((_) {}),
+        bob.lan.connect('127.0.0.1', alicePort).catchError((_) {}),
       ]);
       await Future<void>.delayed(const Duration(milliseconds: 300));
 

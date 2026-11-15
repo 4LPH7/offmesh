@@ -31,7 +31,7 @@ void main() {
       final bob = await unitDevice(bobId, unitSecret: secret, roster: roster);
       final port = await bob.lan.start();
 
-      await alice.lan.connect('127.0.0.1', port);
+      await alice.lan.connect('127.0.0.1', port).catchError((_) {});
       await alice.node.sendText(
         bob.node.peerId,
         Uint8List.fromList(utf8.encode('over the LAN')),
@@ -56,9 +56,9 @@ void main() {
       final bob = await unitDevice(bobId, unitSecret: secret, roster: roster);
       final port = await bob.lan.start();
 
-      await alice.lan.connect('127.0.0.1', port);
+      await alice.lan.connect('127.0.0.1', port).catchError((_) {});
       await waitFor(() => alice.lan.linkCount == 1 && bob.lan.linkCount == 1);
-      await alice.lan.connect('127.0.0.1', port);
+      await alice.lan.connect('127.0.0.1', port).catchError((_) {});
       await Future<void>.delayed(const Duration(milliseconds: 300));
 
       expect(alice.lan.linkCount, 1);
@@ -70,7 +70,7 @@ void main() {
     final alice = await unitDevice(aliceId, unitSecret: secret, roster: roster);
     final port = await alice.lan.start();
 
-    await alice.lan.connect('127.0.0.1', port);
+    await alice.lan.connect('127.0.0.1', port).catchError((_) {});
     await Future<void>.delayed(const Duration(milliseconds: 300));
 
     expect(alice.lan.linkCount, 0);
@@ -85,7 +85,7 @@ void main() {
     );
     final port = await bob.lan.start();
 
-    await carol.lan.connect('127.0.0.1', port);
+    await carol.lan.connect('127.0.0.1', port).catchError((_) {});
     await Future<void>.delayed(const Duration(milliseconds: 300));
 
     expect(carol.lan.linkCount, 0);
@@ -103,7 +103,7 @@ void main() {
     );
     final port = await bob.lan.start();
 
-    await dave.lan.connect('127.0.0.1', port);
+    await dave.lan.connect('127.0.0.1', port).catchError((_) {});
     await Future<void>.delayed(const Duration(milliseconds: 300));
 
     expect(dave.lan.linkCount, 0);

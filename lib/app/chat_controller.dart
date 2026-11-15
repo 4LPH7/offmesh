@@ -296,7 +296,14 @@ class ChatController extends ChangeNotifier {
     }
     final pending = List.of(_queue);
     _queue.clear();
-    for (final item in pending) {
+    for (var index = 0; index < pending.length; index++) {
+      final item = pending[index];
+      // Silent can be chosen while an earlier send awaits: stop, keep the rest held.
+      if (posture.current == Posture.silent) {
+        _queue.insertAll(0, pending.sublist(index));
+        _lastError = 'Silent: held messages were not sent';
+        break;
+      }
       try {
         final packetId = await node.sendText(
           _bytesOf(item.contactId),
@@ -313,8 +320,14 @@ class ChatController extends ChangeNotifier {
           ),
         );
       } on StateError catch (error) {
-        _queue.add(item);
+        // No link yet: keep this message and the rest, in order, for the next burst.
+        _queue.insertAll(0, pending.sublist(index));
         _lastError = error.message;
+        break;
+      } on Object {
+        // Refused for good (for example a message too long to send). Report it and
+        // drop only this one, so the rest of the burst still goes out.
+        _lastError = 'A held message could not be sent and was removed';
       }
     }
     notifyListeners();
