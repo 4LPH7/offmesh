@@ -24,6 +24,13 @@ class RelayForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        // A restart after the process was killed can arrive with a null intent and no
+        // user action. Without a granted Bluetooth permission, startForeground with the
+        // connectedDevice type throws, so stop instead of crashing.
+        if (!hasBluetoothPermission()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         ensureChannel()
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -36,6 +43,12 @@ class RelayForegroundService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
         return START_STICKY
+    }
+
+    private fun hasBluetoothPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        return checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
     private fun ensureChannel() {

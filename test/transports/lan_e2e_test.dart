@@ -104,7 +104,6 @@ void main() {
     final port = await bob.lan.start();
 
     await dave.lan.connect('127.0.0.1', port);
-    await waitFor(() => dave.lan.linkCount == 0 && bob.lan.linkCount == 0);
     await Future<void>.delayed(const Duration(milliseconds: 300));
 
     expect(dave.lan.linkCount, 0);

@@ -162,6 +162,24 @@ void main() {
       expect(store.holds(_env(1).id), isTrue);
     });
 
+    test('equal copies and equal expiry: the smaller id is evicted first', () {
+      final clock = _Clock();
+      final store = EnvelopeStore(nowSeconds: clock.call, capacity: 2);
+      final a = _env(1, copies: 2, expiresIn: 900);
+      final b = _env(2, copies: 2, expiresIn: 900);
+      store
+        ..insert(a)
+        ..insert(b);
+      final lower = custodyIdKey(a.id).compareTo(custodyIdKey(b.id)) < 0
+          ? a
+          : b;
+      final higher = identical(lower, a) ? b : a;
+
+      expect(store.insert(_env(3, copies: 4)), isTrue);
+      expect(store.holds(lower.id), isFalse);
+      expect(store.holds(higher.id), isTrue);
+    });
+
     test('the default cap is 256 envelopes', () {
       final clock = _Clock();
       final store = EnvelopeStore(nowSeconds: clock.call);

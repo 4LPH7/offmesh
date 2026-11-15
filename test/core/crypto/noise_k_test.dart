@@ -21,8 +21,8 @@ Future<SimplePublicKey> _publicOf(SimpleKeyPair pair) =>
 
 void main() {
   // Vectors: trevp/screech vectors.txt, Noise_K_25519_ChaChaPoly_SHA256, msg_0.
-  // The cabinetos/noise-vectors.txt empty-payload case shares the same ephemeral and
-  // confirms the first 32 ciphertext bytes independently.
+  // Only the screech case is pinned: its source file is in the repo history. An
+  // unverified second case was removed rather than kept as a self-computed value.
   group('Noise K vectors', () {
     test(
       'screech msg_0 with payload "test_msg_0" matches byte for byte',
@@ -61,40 +61,6 @@ void main() {
         );
       },
     );
-
-    test('cabinetos msg_0 with empty payload matches byte for byte', () async {
-      final initiator = await X25519().newKeyPairFromSeed(
-        _hex(
-          '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f',
-        ),
-      );
-      final responder = await X25519().newKeyPairFromSeed(
-        _hex(
-          '0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20',
-        ),
-      );
-      final ephemeral = await X25519().newKeyPairFromSeed(
-        _hex(
-          '202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f',
-        ),
-      );
-
-      final sealed = await NoiseK.seal(
-        initiatorStatic: initiator,
-        responderStaticPublic: Uint8List.fromList(
-          (await _publicOf(responder)).bytes,
-        ),
-        prologue: Uint8List(0),
-        plaintext: const [],
-        ephemeral: ephemeral,
-      );
-
-      expect(
-        _toHex(sealed),
-        '358072d6365880d1aeea329adf9121383851ed21a28e3b75e965d0d2cd166254'
-        'af724161ce8037f690f587990caba741',
-      );
-    });
   });
 
   group('Noise K round trip and failures', () {

@@ -13,6 +13,9 @@ const int defaultBeaconPort = 47999;
 const Duration _beaconInterval = Duration(seconds: 3);
 const Duration _dialTimeout = Duration(seconds: 5);
 const Duration _helloTimeout = Duration(seconds: 5);
+
+/// Unauthenticated sockets allowed at once (accepted or dialled, before their hello).
+const int maxPendingLinks = 16;
 const Duration _dialBackoff = Duration(seconds: 3);
 
 /// Beacon-triggered dials in flight at once, across all peers.
@@ -126,7 +129,15 @@ class LanManager {
       throw StateError('Silent: not listening');
     }
     _server = server;
-    server.listen((socket) => unawaited(_adopt(socket, isDialer: false)));
+    server.listen((socket) {
+      // Sockets are unauthenticated until their hello arrives. Refuse new ones past the
+      // cap so a flood of silent connections cannot exhaust file descriptors.
+      if (_pending.length >= maxPendingLinks) {
+        socket.destroy();
+        return;
+      }
+      unawaited(_adopt(socket, isDialer: false));
+    });
     if (beaconPort > 0) await _startBeacons(generation);
     // Silent or a stop during the beacon binds. stop() already took the server. Only
     // a same-generation Silent still needs a stop() here, and a newer generation owns

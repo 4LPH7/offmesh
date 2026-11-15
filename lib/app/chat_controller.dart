@@ -360,14 +360,16 @@ class ChatController extends ChangeNotifier {
     } catch (_) {
       // Ignored: the caller discards this controller either way.
     }
+    // Message memory is cleared even when a delete failed: the wipe must not leave chat
+    // plaintext in RAM just because a key could not be removed.
+    _threads.clear();
+    _queue.clear();
     if (!deleted) {
       _lastError =
           'Wipe incomplete: could not delete every stored key. Try again';
       notifyListeners();
       return false;
     }
-    _threads.clear();
-    _queue.clear();
     _unit = null;
     _members = const [];
     _myFingerprint = '';
