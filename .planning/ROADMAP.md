@@ -8,7 +8,7 @@ from anyone without the unit's keys, to keep radio emissions short and under ope
 control, and to limit what a captured phone gives away. See `docs/mission_plan.md` for the
 threat model and the limits.
 
-Five phases. Each ends with one device test that can be run with two Android phones and a
+Eight phases. Each ends with one device test that can be run with two Android phones and a
 Windows PC. Requirement IDs match `REQUIREMENTS.md`, which is the single source.
 
 ## Phases
@@ -18,6 +18,9 @@ Windows PC. Requirement IDs match `REQUIREMENTS.md`, which is the single source.
 - [ ] **Phase 3: BLE link and background relay** - A BLE transport behind the existing `MeshTransport` interface, kept alive by a foreground service.
 - [ ] **Phase 4: Operator controls** - Radio posture switch, panic wipe, Relay Mode screen.
 - [ ] **Phase 5: Store-and-forward** - Messages for an offline recipient are carried by other phones.
+- [ ] **Phase 6: Channels and push-to-talk** - Unit channels for group text and hold-to-talk voice bursts over LAN.
+- [ ] **Phase 7: Internet mode** - Members reach each other over the internet through a relay that sees only sealed frames, or by direct IP.
+- [ ] **Phase 8: Minimal UI** - One talk screen with a large push-to-talk button; everything else one tap away.
 
 ## Phase Details
 
@@ -115,16 +118,86 @@ Plans:
 Plans:
 - [x] 05-01: One-way encryption and custody/store primitives; app integration is outside this plan and remains undone.
 
+### Phase 6: Channels and push-to-talk
+**Goal**: A unit talks like a walkie-talkie: pick a channel, hold a button, everyone on the channel hears it.
+**Depends on**: Phase 2 (sealed LAN). Runs on LAN first; BLE and internet carry it once those links are wired.
+**Requirements**: REQ-29 to REQ-33
+**Decision reversed**: push-to-talk was "Not planned" because continuous transmission conflicts with emission control. It returns as short bursts under operator control, blocked in Silent and held in Quiet.
+**Success Criteria** (what must be TRUE):
+  1. A channel is a name plus a key derived from the unit secret; members on the same channel name decrypt each other, others in the unit do not.
+  2. Text sent to a channel reaches every linked member on it, once, with no per-member handshake.
+  3. Holding the talk button records and sends voice in frames; releasing ends the burst. A listener hears it with under one second of delay on LAN.
+  4. Only one speaker is played at a time per channel; a second speaker is shown as busy.
+  5. Silent blocks talk and channel sends; Quiet holds text and refuses voice.
+  6. A burst is capped (default 30 seconds) and the cap is shown as a countdown.
+**Device test**: Three devices on one hotspot, same channel. Each speaks a 5-second burst in turn; the other two hear it. A device on another channel hears nothing.
+**Plans**: starts with a spike
+
+Plans:
+- [ ] 06-00: Spike, one day: record and play Opus (or the platform codec) on Android and Windows through one plugin; measure frame size and latency. Output: codec and plugin choice.
+- [ ] 06-01: Channel keys (HKDF from unit secret and channel name), broadcast packet type sealed under the channel key, replay window per sender, group text.
+- [ ] 06-02: Voice burst framing (start, frames, end), jitter buffer, single-speaker rule, burst cap.
+- [ ] 06-03: Posture gates, roger beep, last-heard indicator.
+
+### Phase 7: Internet mode
+**Goal**: Two members in different places talk and text when both have internet, with the same keys and no accounts.
+**Depends on**: Phase 6
+**Requirements**: REQ-34 to REQ-37
+**Honest limits**: internet mode gives up the "no infrastructure" property while it is on. The relay learns each member's IP address, when they are online, and frame sizes. It cannot read content, headers, or identities. It is off by default and Silent turns it off.
+**Success Criteria** (what must be TRUE):
+  1. A small relay server forwards sealed frames between connections that present the same rendezvous ID; it stores nothing and needs no accounts.
+  2. The rendezvous ID is derived from the unit secret and rotates daily, so the relay cannot link a unit across days by ID.
+  3. The app connects to a relay by address (IP or hostname and port) typed or scanned once; the link is a normal `MeshTransport`, sealed and roster-checked like LAN.
+  4. Direct mode: a member with a reachable address accepts a link from another member by IP and port (already works on LAN; documented for port forwarding or a VPN).
+  5. Internet mode is a visible switch, off by default, off in Silent, and shows a warning the first time.
+  6. A relay that drops, replays, or reorders frames cannot make a node accept a forged message.
+**Device test**: Phone A on mobile data and the PC on home Wi-Fi, both pointed at a relay running on a third machine. Text both ways and one voice burst each way. A capture at the relay shows no readable header or identifier.
+**Plans**: 3 plans
+
+Plans:
+- [ ] 07-01: Relay server (single Dart file, WebSocket or TCP), rendezvous ID derivation, rate limits, run instructions.
+- [ ] 07-02: `RelayLink implements MeshTransport` over the existing sealed link; reconnect with backoff.
+- [ ] 07-03: Internet switch, relay address entry and QR, first-use warning, posture gates.
+
+### Phase 8: Minimal UI
+**Goal**: A new user talks within one minute, with one hand.
+**Depends on**: Phase 6 (talk button needs voice)
+**Requirements**: REQ-38 to REQ-40
+**Success Criteria** (what must be TRUE):
+  1. Home is one screen: channel or contact name, link status in one line, a large hold-to-talk button, and a text field. Nothing else.
+  2. Channels, members, posture, internet mode, relay, and wipe live behind one menu, at most two taps from home.
+  3. Status uses words and one colour dot (Linked, Searching, Silent, Internet); no codes or port numbers on the home screen.
+  4. Touch targets are at least 48 dp, text scales with the system font size, and every control has a screen-reader label.
+  5. First run is three steps: name, create or join, done.
+**Device test**: A person who has not seen the app joins a unit by QR and sends a voice burst in under one minute, unaided.
+**Plans**: 2 plans
+
+Plans:
+- [ ] 08-01: Talk screen and navigation; move port, fingerprint, and connect details to a details page.
+- [ ] 08-02: First-run flow, accessibility pass, empty and error states.
+
+## Suggested additions (not scheduled)
+
+Small features that fit the design; each needs a go-ahead before it becomes a requirement.
+
+- Voice notes: record, send as an ordinary message, play later. Reuses Phase 6 recording.
+- Quick replies: six preset one-tap messages (OK, Wait, Come here, ...). Cheap and useful with gloves.
+- Last heard: per member, how long since their last frame.
+- SOS: one long-press sends a high-priority channel message with an alarm sound.
+- Location share: opt-in, one-shot, sent as a message; never continuous.
+- Resend: a message with no receipt after a timeout offers a resend.
+- Message history on disk: opt-in, encrypted; conflicts with the memory-only default, so off by default.
+
 ## Not planned
 
 Cut or parked so they stop reappearing. Each needs a stated reason to return.
 
 - mDNS discovery: the UDP beacon already works and mDNS adds a cleartext service name.
 - Animated multi-frame QR, in-app APK sharing, duress PIN.
-- Brevity codes, scheduled transmit windows, clock sync, unit broadcast channel.
+- Brevity codes (see quick replies under Suggested additions), scheduled transmit windows, clock sync.
 - Cellular interlock beyond a warning banner (apps cannot switch the cellular radio off).
 - Wi-Fi Direct and Wi-Fi Aware, until a hotspot is shown to be insufficient.
-- Live push-to-talk streaming and WebRTC calls. Voice returns as a Codec2-encoded voice note inside an ordinary message; its only spike is building `libcodec2` (LGPL-2.1, check linking terms) with the NDK.
+- WebRTC calls and full-duplex voice. Push-to-talk bursts and channels moved to Phase 6. Codec2 for BLE voice stays parked until BLE links are verified on phones.
 - Coded PHY as a requirement (opportunistic use only), reproducible builds, RF audit with radio test gear.
 - Relay-side unicast forwarding and a seal-only relay key tier (see Open decisions).
 - iOS.
@@ -145,3 +218,6 @@ Cut or parked so they stop reappearing. Each needs a stated reason to return.
 | 3. BLE link and relay | 1/2 | Provisional link/radio built; spike NOT RUN; app wiring incomplete | - |
 | 4. Operator controls | 1/1 | Software built; BLE posture and device checks open | - |
 | 5. Store-and-forward | 1/1 | Primitives built; app integration and device test open | - |
+| 6. Channels and push-to-talk | 0/4 | Not started | - |
+| 7. Internet mode | 0/3 | Not started | - |
+| 8. Minimal UI | 0/2 | Not started | - |

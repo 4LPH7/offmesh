@@ -43,6 +43,24 @@ wired into the running app.
 - [x] **REQ-27**: Custody envelope with expiry and copy budget; exchange of held message IDs on contact.
 - [x] **REQ-28**: Memory-only envelope store with a fixed cap and expiry pruning.
 
+## Phase 6: Channels and push-to-talk
+- [ ] **REQ-29**: Channel key derived from the unit secret and channel name (HKDF); a sealed broadcast packet type that only channel members can open.
+- [ ] **REQ-30**: Group text on a channel, delivered once per member, with a per-sender replay window.
+- [ ] **REQ-31**: Push-to-talk voice bursts: hold to record and send in frames, release to end; capped length; under one second delay on LAN.
+- [ ] **REQ-32**: One speaker played at a time per channel; a second speaker is shown as busy.
+- [ ] **REQ-33**: Posture gates: Silent blocks talk and channel sends; Quiet holds text and refuses voice.
+
+## Phase 7: Internet mode
+- [ ] **REQ-34**: Relay server that forwards sealed frames between connections with the same rendezvous ID; stores nothing; no accounts.
+- [ ] **REQ-35**: Rendezvous ID derived from the unit secret, rotating daily.
+- [ ] **REQ-36**: `RelayLink implements MeshTransport`, sealed and roster-checked like LAN, with reconnect and backoff.
+- [ ] **REQ-37**: Internet switch: off by default, off in Silent, first-use warning; relay address by typing or QR.
+
+## Phase 8: Minimal UI
+- [ ] **REQ-38**: Home is one talk screen: name, one-line status, large talk button, text field.
+- [ ] **REQ-39**: Everything else at most two taps from home; first run in three steps.
+- [ ] **REQ-40**: Accessibility: 48 dp targets, system font scaling, screen-reader labels on every control.
+
 ## Traceability
 
 | REQ | Phase | Plan | Status |
@@ -64,6 +82,9 @@ wired into the running app.
 | REQ-23 | 4 | 04-01 | LAN posture gates tested; BLE gate missing |
 | REQ-24, REQ-25 | 4 | 04-01 | Implemented and automated-tested; device checks NOT RUN |
 | REQ-26 to REQ-28 | 5 | 05-01 | Built and tested as primitives; no app contact flow |
+| REQ-29 to REQ-33 | 6 | 06-00 spike first | Not started |
+| REQ-34 to REQ-37 | 7 | 07-01 to 07-03 | Not started |
+| REQ-38 to REQ-40 | 8 | 08-01, 08-02 | Not started |
 
 ## Status notes (2026-11-15)
 - Verified in this run: `flutter test` (353 passed), `flutter analyze` (clean), format check (clean), and `flutter build apk --debug` (success).

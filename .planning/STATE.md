@@ -2,9 +2,9 @@
 gsd_state_version: '1.0'
 status: executing
 progress:
-  total_phases: 5
+  total_phases: 8
   completed_phases: 1
-  total_plans: 14
+  total_plans: 23
   completed_plans: 13
   percent: 93
 ---
@@ -17,14 +17,14 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 See: docs/mission_plan.md (threat model, limits, design decisions)
 
 **Core value:** Offline, end-to-end encrypted phone-to-phone messaging for a pre-provisioned unit, with sealed frames and operator-controlled emissions.
-**Current focus:** Phase 2 software is complete; its real-device acceptance test is still NOT RUN. Phase 3's two-phone BLE spike is the next hardware gate.
+**Current focus:** Phases 1-5 are built in software; device acceptance tests are NOT RUN. Next software work is Phase 6 (channels and push-to-talk), starting with the audio spike 06-00. Phases 7 (internet mode) and 8 (minimal UI) follow.
 
 ## Current Position
 
 Phase: 2 of 5 (Sealed LAN chat on real devices)
 Plan: 5 of 5 (device procedure written; execution NOT RUN)
 Status: Phase 1 is complete. Phase 2 implementation and automated validation pass; device acceptance remains open. Phases 3–5 have partial software implementation, described in ROADMAP.md.
-Last activity: 2026-11-15 — Messages, Unit and Controls use focused tabs; the composer and connection status are simplified; Relay Mode is Android-only and BLE availability is explicit. Fresh validation: 353 tests pass, analyzer and format checks are clean, APK rebuilt, and Windows clean build plus debug launch pass. No Android device is attached; device acceptance remains NOT RUN.
+Last activity: 2026-11-16 — Roadmap extended to eight phases: channels and push-to-talk (6), internet mode through a sealed-frame relay (7), minimal one-screen UI (8); REQ-29 to REQ-40 added. Before that: Messages, Unit and Controls use focused tabs; the composer and connection status are simplified; Relay Mode is Android-only and BLE availability is explicit. Fresh validation: 353 tests pass, analyzer and format checks are clean, APK rebuilt, and Windows clean build plus debug launch pass. No Android device is attached; device acceptance remains NOT RUN.
 
 ## Performance Metrics
 

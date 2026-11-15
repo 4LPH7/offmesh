@@ -74,8 +74,11 @@ Phase 1 is complete in simulation. Phase 2 software is built; its phone/PC captu
 2. Phase 3 BLE spike, then app wiring and radio posture gates.
 3. Phase 4 phone acceptance, including Silent and screen-off relay behavior.
 4. Phase 5 app integration and store-and-forward device acceptance.
+5. Phase 6: channels and push-to-talk voice bursts (walkie-talkie use).
+6. Phase 7: internet mode through a relay that sees only sealed frames, or by direct IP.
+7. Phase 8: one-screen minimal UI with a large talk button.
 
-Not planned: voice calls, live push-to-talk, Wi-Fi Direct, mDNS, iOS, external radios.
+Not planned: full-duplex voice calls, Wi-Fi Direct, mDNS, iOS, external radios.
 
 ## Build and test
 
