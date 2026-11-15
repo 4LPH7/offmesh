@@ -7,9 +7,12 @@ import 'package:offmesh/core/posture.dart';
 import 'lan_test_support.dart';
 
 /// A port of its own, so this file's beacons never meet another test file's beacons.
-const int _lifecycleBeaconPort = 47983;
+late int _lifecycleBeaconPort;
 
 void main() {
+  setUpAll(() async {
+    _lifecycleBeaconPort = await freeUdpPort();
+  });
   test(
     'a start that begins while stop() is closing gets a live listener',
     () async {

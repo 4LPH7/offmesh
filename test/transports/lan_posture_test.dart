@@ -5,11 +5,14 @@ import 'package:offmesh/core/posture.dart';
 import 'lan_test_support.dart';
 
 /// A port of its own, so this file's beacons never meet another test file's beacons.
-const int _quietTestBeaconPort = 47981;
+late int _quietTestBeaconPort;
 
 /// Two devices that find each other only by beacon. Quiet on one side must stop the
 /// beacons and the beacon-triggered dials, and Normal must bring the link back.
 void main() {
+  setUpAll(() async {
+    _quietTestBeaconPort = await freeUdpPort();
+  });
   test(
     'a Quiet phone sends no beacon and dials none, and links once it is Normal',
     () async {

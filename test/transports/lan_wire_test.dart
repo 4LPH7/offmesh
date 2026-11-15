@@ -15,7 +15,7 @@ import 'package:offmesh/transports/lan_link.dart';
 import 'lan_test_support.dart';
 
 /// Test-only beacon port, so beacons from other test files on 47999 do not mix in.
-const int _captureBeaconPort = 47996;
+late int _captureBeaconPort;
 
 final List<int> _tag = ascii.encode('OFFM');
 
@@ -93,6 +93,9 @@ void _expectNoCleartext(List<int> wire, List<TestDevice> devices) {
 }
 
 void main() {
+  setUpAll(() async {
+    _captureBeaconPort = await freeUdpPort();
+  });
   final secret = testSecret(3);
   late Identity aliceId;
   late Identity bobId;

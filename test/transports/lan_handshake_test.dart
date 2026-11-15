@@ -14,7 +14,7 @@ import 'package:offmesh/transports/lan_link.dart';
 import 'lan_test_support.dart';
 
 /// Test-only beacon port, apart from the ports other test files use.
-const int _beaconPort = 47995;
+late int _beaconPort;
 
 /// Well under the 5 s hello timeout, so a pass proves the socket was closed on reject.
 const Duration _rejectWithin = Duration(seconds: 1);
@@ -38,6 +38,9 @@ Future<List<Socket>> _countingServer(
 }
 
 void main() {
+  setUpAll(() async {
+    _beaconPort = await freeUdpPort();
+  });
   final secret = testSecret(5);
   late UnitKeys keys;
   late Identity aliceId;

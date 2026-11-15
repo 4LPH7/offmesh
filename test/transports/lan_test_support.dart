@@ -143,3 +143,12 @@ bool containsBytes(List<int> haystack, List<int> needle) {
   }
   return false;
 }
+
+/// A UDP port the OS just confirmed free, for tests that need a beacon port. Avoids
+/// clashes with a running app or another test on a fixed port number.
+Future<int> freeUdpPort() async {
+  final probe = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4, 0);
+  final port = probe.port;
+  probe.close();
+  return port;
+}
