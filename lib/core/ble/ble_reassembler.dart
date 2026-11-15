@@ -21,6 +21,7 @@ class _Partial {
   final DateTime createdAt;
   final List<Uint8List?> parts;
   int received = 0;
+  int bytes = 0;
 }
 
 /// Rebuilds sealed frames from chunks. Bounded memory: at most [maxInFlight] partial
@@ -71,10 +72,18 @@ class BleReassembler {
       _partials[messageId] = partial;
     }
     if (partial.parts[index] == null) {
+      final payloadLength = chunk.length - bleChunkHeaderLength;
+      // Refuse before storing: an unauthenticated peer must not grow a partial past the
+      // frame limit, which would otherwise be checked only after the last chunk.
+      if (partial.bytes + payloadLength > maxBleFrameLength) {
+        _partials.remove(messageId);
+        throw const BleFramingException('partial frame over the size limit');
+      }
       // Copied: the caller may reuse the buffer it passed in.
       partial.parts[index] = Uint8List.fromList(
         chunk.sublist(bleChunkHeaderLength),
       );
+      partial.bytes += payloadLength;
       partial.received++;
     }
     if (partial.received < partial.total) return null;

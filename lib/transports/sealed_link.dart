@@ -139,10 +139,15 @@ class SealedLink {
     if (!_remotePeerId.isCompleted) {
       _remotePeerId.completeError(const LinkClosedException());
     }
-    await _closeTransport();
-    // Not awaited: the future only completes once someone listens, and a rejected link never has a listener.
-    unawaited(_incoming.close());
-    if (!_closed.isCompleted) _closed.complete();
+    try {
+      await _closeTransport();
+    } finally {
+      // Owners wait on closed to drop the link; it must complete even if the socket or
+      // radio channel fails to close cleanly.
+      // Not awaited: the future only completes once someone listens, and a rejected link never has a listener.
+      unawaited(_incoming.close());
+      if (!_closed.isCompleted) _closed.complete();
+    }
   }
 
   void _tick() {
