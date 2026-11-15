@@ -131,6 +131,6 @@ Cut or parked so they stop reappearing. Each needs a stated reason to return.
 |-------|----------------|--------|-----------|
 | 1. Protocol core | 5/5 | Complete | 2026-11-14 |
 | 2. Sealed LAN chat | 5/5 | Built; device test NOT RUN | - |
-| 3. BLE link and relay | 1/2 | Built with fakes; spike NOT RUN; no foreground service | - |
-| 4. Operator controls | 1/1 | Built; device checks NOT RUN | - |
+| 3. BLE link and relay | 2/2 | Built with fakes and foreground service; spike NOT RUN | - |
+| 4. Operator controls | 1/1 | Built, incl. Relay Mode service; device checks NOT RUN | - |
 | 5. Store-and-forward | 2/2 | Built; device test NOT RUN | - |

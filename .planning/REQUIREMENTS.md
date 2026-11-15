@@ -30,13 +30,13 @@ wired into the running app.
 ## Phase 3: BLE link and background relay
 - [x] **REQ-19**: `BleLink implements MeshTransport` with link-layer segmentation that works at ATT MTU 23.
 - [ ] **REQ-20**: Dual role: advertise, scan, GATT server, and GATT client at the same time, with Android 12+ Bluetooth permissions.
-- [ ] **REQ-21**: Typed foreground service (`connectedDevice`) that keeps links alive with the screen off.
+- [x] **REQ-21**: Typed foreground service (`connectedDevice`) that keeps links alive with the screen off.
 - [x] **REQ-22**: BLE advertisements carry a rotating ID and no static identifier.
 
 ## Phase 4: Operator controls
 - [x] **REQ-23**: Radio posture switch with per-transport definitions: Silent, Quiet, Normal.
 - [x] **REQ-24**: Panic wipe as key deletion from the keystore plus memory clear.
-- [ ] **REQ-25**: Relay Mode screen: black display, counters, foreground service on.
+- [x] **REQ-25**: Relay Mode screen: black display, counters, foreground service on.
 
 ## Phase 5: Store-and-forward
 - [x] **REQ-26**: One-way encryption to a roster member's static key, with its lost properties documented.
@@ -63,7 +63,7 @@ wired into the running app.
 | REQ-26 to REQ-28 | 5 | TBD | Not started |
 
 ## Status notes (2026-11-15)
-- REQ-20 (dual role) is implemented in code but NOT verified on hardware; the GATT and advertising paths have only been reviewed.
-- REQ-21 (foreground service) is NOT implemented. Pocketed phones may be killed with the screen off.
-- REQ-25 (Relay Mode) shows counters and a black screen; the foreground service part is NOT implemented.
+- REQ-20 (dual role) is implemented in code but NOT verified on hardware; the GATT and advertising paths were reviewed, not run.
+- REQ-21 (foreground service, connectedDevice) is built: RelayForegroundService and RelayServicePlugin, started from Relay Mode. On Android 14+ the service needs a Bluetooth permission granted at runtime; the app has no runtime permission prompt yet, so start reports service_failed until one is granted.
+- REQ-25 (Relay Mode) is built with the foreground service. Not verified on a device.
 - Device tests in docs/ble_spike.md, docs/operator_tests.md, docs/dtn_tests.md and docs/device_tests.md are NOT RUN.

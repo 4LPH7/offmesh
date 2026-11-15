@@ -4,16 +4,20 @@ import 'package:flutter/material.dart';
 
 import '../app/chat_controller.dart';
 import '../core/posture.dart';
+import '../transports/relay_service.dart';
 
 const Duration _refreshInterval = Duration(seconds: 1);
 
 /// Relay Mode: a black screen with forwarding counters. Entering it sets the posture to
-/// Normal, since a relay that stays silent forwards nothing. Keeping the process alive
-/// with the screen off needs the foreground service, which is not built yet.
+/// Normal (a silent relay forwards nothing) and starts the Android foreground service so
+/// the links survive the screen going off. Leaving stops the service.
 class RelayScreen extends StatefulWidget {
-  const RelayScreen({super.key, required this.controller});
+  const RelayScreen({super.key, required this.controller, this.service});
 
   final ChatController controller;
+
+  /// Null in the app; tests pass a fake channel.
+  final RelayService? service;
 
   @override
   State<RelayScreen> createState() => _RelayScreenState();
@@ -21,19 +25,24 @@ class RelayScreen extends StatefulWidget {
 
 class _RelayScreenState extends State<RelayScreen> {
   Timer? _refresh;
+  late final RelayService _service = widget.service ?? RelayService();
 
   @override
   void initState() {
     super.initState();
     unawaited(widget.controller.setPosture(Posture.normal));
-    _refresh = Timer.periodic(_refreshInterval, (_) {
-      if (mounted) setState(() {});
-    });
+    unawaited(_service.start().then((_) => _refreshed()));
+    _refresh = Timer.periodic(_refreshInterval, (_) => _refreshed());
+  }
+
+  void _refreshed() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _refresh?.cancel();
+    unawaited(_service.stop());
     super.dispose();
   }
 
@@ -60,6 +69,14 @@ class _RelayScreenState extends State<RelayScreen> {
               Text('Suppressed: ${node.relaysSuppressed}', style: style),
               const SizedBox(height: 8),
               Text('Links: ${lan.linkCount}', style: style),
+              const SizedBox(height: 8),
+              Text(
+                _service.running
+                    ? 'Background service: running'
+                    : 'Background service: not running (${_service.lastError ?? 'starting'})',
+                key: const Key('relay-service-status'),
+                style: const TextStyle(color: Colors.white54, fontSize: 14),
+              ),
               const Spacer(),
               OutlinedButton(
                 key: const Key('relay-leave-button'),
