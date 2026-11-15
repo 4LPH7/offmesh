@@ -55,16 +55,16 @@ void main() {
     expect(service.lastError, 'unavailable');
   });
 
-  test('stop does nothing unless the service was started', () async {
+  test('stop always reaches native, even before a start finished', () async {
     mockChannel((_) async => null);
     final service = RelayService();
 
     await service.stop();
-    expect(calls, isEmpty);
+    expect(calls, ['stop']);
 
     await service.start();
     await service.stop();
-    expect(calls, ['start', 'stop']);
+    expect(calls, ['stop', 'start', 'stop']);
     expect(service.running, isFalse);
   });
 }
