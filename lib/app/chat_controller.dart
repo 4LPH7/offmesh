@@ -378,8 +378,10 @@ class ChatController extends ChangeNotifier {
     _threads.clear();
     _queue.clear();
     if (!deleted) {
+      // The radios are already off on purpose: nothing arrives until the app restarts.
       _lastError =
-          'Wipe incomplete: could not delete every stored key. Try again';
+          'Wipe incomplete: a stored key could not be deleted. Radios are off; '
+          'retry the wipe, or restart the app to listen again';
       notifyListeners();
       return false;
     }
