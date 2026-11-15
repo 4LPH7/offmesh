@@ -134,7 +134,7 @@ Plans:
 **Plans**: starts with a spike
 
 Plans:
-- [ ] 06-00: Spike, one day: record and play Opus (or the platform codec) on Android and Windows through one plugin; measure frame size and latency. Output: codec and plugin choice.
+- [x] 06-00: Spike: `record` (capture) + `flutter_soloud` (playback) + pure-Dart IMA ADPCM 8 kHz. Android and Windows builds pass on branch `spike/audio`; device latency run NOT RUN. See `docs/audio_spike.md`.
 - [ ] 06-01: Channel keys (HKDF from unit secret and channel name), broadcast packet type sealed under the channel key, replay window per sender, group text.
 - [ ] 06-02: Voice burst framing (start, frames, end), jitter buffer, single-speaker rule, burst cap.
 - [ ] 06-03: Posture gates, roger beep, last-heard indicator.
@@ -218,6 +218,6 @@ Cut or parked so they stop reappearing. Each needs a stated reason to return.
 | 3. BLE link and relay | 1/2 | Provisional link/radio built; spike NOT RUN; app wiring incomplete | - |
 | 4. Operator controls | 1/1 | Software built; BLE posture and device checks open | - |
 | 5. Store-and-forward | 1/1 | Primitives built; app integration and device test open | - |
-| 6. Channels and push-to-talk | 0/4 | Not started | - |
+| 6. Channels and push-to-talk | 1/4 | Spike built; device run NOT RUN | - |
 | 7. Internet mode | 0/3 | Not started | - |
 | 8. Minimal UI | 0/2 | Not started | - |
