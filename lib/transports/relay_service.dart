@@ -34,8 +34,9 @@ class RelayService {
     return _running;
   }
 
+  /// Always sends stop, even when start has not finished yet: the channel is ordered, so
+  /// the stop lands after a start that is still in flight. Native stop is idempotent.
   Future<void> stop() async {
-    if (!_running) return;
     try {
       await _channel.invokeMethod<void>('stop');
     } on PlatformException catch (error) {

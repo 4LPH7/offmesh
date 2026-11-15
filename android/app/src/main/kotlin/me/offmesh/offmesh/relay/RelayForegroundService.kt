@@ -42,7 +42,9 @@ class RelayForegroundService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
-        return START_STICKY
+        // Not sticky: after a process kill the Dart side is not running, so a restart
+        // would show a relay notification with nothing forwarding.
+        return START_NOT_STICKY
     }
 
     private fun hasBluetoothPermission(): Boolean {
