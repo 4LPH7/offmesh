@@ -1,10 +1,12 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 
 import 'identity.dart';
 import 'replay_window.dart';
+import 'noise_primitives.dart';
+
+export 'noise_primitives.dart' show NoiseException, maxSessionMessages;
 
 /// Explicit transport counter that prefixes every transport frame.
 const int _counterLength = 8;
@@ -13,174 +15,7 @@ const int _counterLength = 8;
 /// neither side knows the other's static key beforehand.
 const String noiseProtocolName = 'Noise_XX_25519_ChaChaPoly_SHA256';
 
-const int _keyLength = 32;
-const int _tagLength = 16;
-const int _encryptedStaticLength = _keyLength + _tagLength;
-
-/// Refuse to use a transport session past this many messages (nonce safety ceiling).
-const int maxSessionMessages = 1 << 32;
-
-class NoiseException implements Exception {
-  const NoiseException(this.message);
-
-  final String message;
-
-  @override
-  String toString() => 'NoiseException: $message';
-}
-
-Future<Uint8List> _sha256(List<int> data) async =>
-    Uint8List.fromList((await Sha256().hash(data)).bytes);
-
-Future<Uint8List> _hmac(List<int> key, List<int> data) async {
-  final mac = await Hmac.sha256().calculateMac(data, secretKey: SecretKey(key));
-  return Uint8List.fromList(mac.bytes);
-}
-
-/// Noise HKDF with two outputs (HMAC-based, as the spec defines it).
-Future<(Uint8List, Uint8List)> _hkdf2(
-  List<int> chainingKey,
-  List<int> inputKeyMaterial,
-) async {
-  final temp = await _hmac(chainingKey, inputKeyMaterial);
-  final out1 = await _hmac(temp, const [0x01]);
-  final out2 = await _hmac(temp, [...out1, 0x02]);
-  return (out1, out2);
-}
-
-Uint8List _nonceBytes(int counter) {
-  final data = ByteData(12);
-  data.setUint32(4, counter & 0xFFFFFFFF, Endian.little);
-  data.setUint32(8, counter >> 32, Endian.little);
-  return data.buffer.asUint8List();
-}
-
-/// One direction of transport encryption. Empty key means "no encryption yet".
-class _CipherState {
-  _CipherState([this._key]);
-
-  final SecretKey? _key;
-  int _nonce = 0;
-
-  /// Reserves the next counter. Each counter is used for one encryption under this key.
-  int takeCounter() {
-    if (_nonce >= maxSessionMessages) {
-      throw const NoiseException('session message limit reached; re-handshake');
-    }
-    return _nonce++;
-  }
-
-  Future<Uint8List> encrypt(List<int> associatedData, List<int> plaintext) =>
-      encryptAt(takeCounter(), associatedData, plaintext);
-
-  /// Encrypts under an explicit [counter]. The caller must never reuse one.
-  Future<Uint8List> encryptAt(
-    int counter,
-    List<int> associatedData,
-    List<int> plaintext,
-  ) async {
-    final key = _key;
-    if (key == null) return Uint8List.fromList(plaintext);
-    final box = await _aead.encrypt(
-      plaintext,
-      secretKey: key,
-      nonce: _nonceBytes(counter),
-      aad: associatedData,
-    );
-    return Uint8List.fromList([...box.cipherText, ...box.mac.bytes]);
-  }
-
-  /// Decrypts with the next implicit counter. The counter advances only on success.
-  Future<Uint8List> decrypt(
-    List<int> associatedData,
-    List<int> ciphertext,
-  ) async {
-    final counter = _nonce;
-    final plaintext = await decryptAt(counter, associatedData, ciphertext);
-    _nonce = counter + 1;
-    return plaintext;
-  }
-
-  /// Authenticates [ciphertext] under an explicit [counter]. Keeps no state.
-  Future<Uint8List> decryptAt(
-    int counter,
-    List<int> associatedData,
-    List<int> ciphertext,
-  ) async {
-    final key = _key;
-    if (key == null) return Uint8List.fromList(ciphertext);
-    if (ciphertext.length < _tagLength) {
-      throw const NoiseException('ciphertext shorter than the auth tag');
-    }
-    final split = ciphertext.length - _tagLength;
-    final box = SecretBox(
-      ciphertext.sublist(0, split),
-      nonce: _nonceBytes(counter),
-      mac: Mac(ciphertext.sublist(split)),
-    );
-    try {
-      return Uint8List.fromList(
-        await _aead.decrypt(box, secretKey: key, aad: associatedData),
-      );
-    } on SecretBoxAuthenticationError {
-      throw const NoiseException('message failed authentication');
-    }
-  }
-}
-
-final Chacha20 _aead = Chacha20.poly1305Aead();
-
-class _SymmetricState {
-  _SymmetricState._(this._handshakeHash, this._chainingKey);
-
-  Uint8List _handshakeHash;
-  Uint8List _chainingKey;
-  _CipherState _cipher = _CipherState();
-
-  static Future<_SymmetricState> start() async {
-    final name = utf8.encode(noiseProtocolName);
-    final hash = name.length <= _keyLength
-        ? Uint8List.fromList([
-            ...name,
-            ...List.filled(_keyLength - name.length, 0),
-          ])
-        : await _sha256(name);
-    return _SymmetricState._(hash, Uint8List.fromList(hash));
-  }
-
-  Future<void> mixHash(List<int> data) async {
-    _handshakeHash = await _sha256([..._handshakeHash, ...data]);
-  }
-
-  Future<void> mixKey(List<int> inputKeyMaterial) async {
-    final (chaining, key) = await _hkdf2(_chainingKey, inputKeyMaterial);
-    _chainingKey = chaining;
-    _cipher = _CipherState(SecretKey(key.sublist(0, _keyLength)));
-  }
-
-  Future<Uint8List> encryptAndHash(List<int> plaintext) async {
-    final ciphertext = await _cipher.encrypt(_handshakeHash, plaintext);
-    await mixHash(ciphertext);
-    return ciphertext;
-  }
-
-  Future<Uint8List> decryptAndHash(List<int> ciphertext) async {
-    final plaintext = await _cipher.decrypt(_handshakeHash, ciphertext);
-    await mixHash(ciphertext);
-    return plaintext;
-  }
-
-  /// Returns (initiator-to-responder, responder-to-initiator) cipher states.
-  Future<(_CipherState, _CipherState)> split() async {
-    final (first, second) = await _hkdf2(_chainingKey, const []);
-    return (
-      _CipherState(SecretKey(first.sublist(0, _keyLength))),
-      _CipherState(SecretKey(second.sublist(0, _keyLength))),
-    );
-  }
-
-  Uint8List get handshakeHash => _handshakeHash;
-}
+const int _encryptedStaticLength = noiseKeyLength + noiseTagLength;
 
 /// Post-handshake encrypted channel to one peer.
 ///
@@ -190,15 +25,15 @@ class _SymmetricState {
 /// were passed to [encrypt]. A frame that fails authentication changes no receive state.
 class NoiseSession {
   NoiseSession._({
-    required _CipherState send,
-    required _CipherState receive,
+    required NoiseCipherState send,
+    required NoiseCipherState receive,
     required this.handshakeHash,
     required this.remoteStaticPublicKey,
   }) : _send = send,
        _receive = receive;
 
-  final _CipherState _send;
-  final _CipherState _receive;
+  final NoiseCipherState _send;
+  final NoiseCipherState _receive;
   final ReplayWindow _replay = ReplayWindow();
   final Uint8List handshakeHash;
   final Uint8List remoteStaticPublicKey;
@@ -219,7 +54,7 @@ class NoiseSession {
     List<int> frame, {
     List<int> associatedData = const [],
   }) async {
-    if (frame.length < _counterLength + _tagLength) {
+    if (frame.length < _counterLength + noiseTagLength) {
       throw const NoiseException('transport frame too short');
     }
     final bytes = Uint8List.fromList(frame);
@@ -256,7 +91,7 @@ class NoiseHandshake {
     required SimpleKeyPair staticKeyPair,
     required Uint8List staticPublicKey,
     required SimpleKeyPair? ephemeralKeyPair,
-    required _SymmetricState symmetric,
+    required NoiseSymmetricState symmetric,
     required Uint8List? expectedResponderPeerId,
   }) : _role = role,
        _staticKeyPair = staticKeyPair,
@@ -269,7 +104,7 @@ class NoiseHandshake {
   final SimpleKeyPair _staticKeyPair;
   final Uint8List _staticPublicKey;
   SimpleKeyPair? _ephemeralKeyPair;
-  final _SymmetricState _symmetric;
+  final NoiseSymmetricState _symmetric;
   final Uint8List? _expectedResponderPeerId;
 
   Uint8List? _remoteEphemeral;
@@ -316,7 +151,7 @@ class NoiseHandshake {
     required SimpleKeyPair? ephemeralKeyPair,
     required Uint8List? expectedResponderPeerId,
   }) async {
-    final symmetric = await _SymmetricState.start();
+    final symmetric = await NoiseSymmetricState.start(noiseProtocolName);
     await symmetric.mixHash(prologue);
     final publicKey = Uint8List.fromList(
       (await staticKeyPair.extractPublicKey()).bytes,
@@ -379,10 +214,10 @@ class NoiseHandshake {
   }
 
   Future<Uint8List> _readMessage1(Uint8List message) async {
-    _requireLength(message, _keyLength);
-    _remoteEphemeral = Uint8List.fromList(message.sublist(0, _keyLength));
+    _requireLength(message, noiseKeyLength);
+    _remoteEphemeral = Uint8List.fromList(message.sublist(0, noiseKeyLength));
     await _symmetric.mixHash(_remoteEphemeral!);
-    return _symmetric.decryptAndHash(message.sublist(_keyLength));
+    return _symmetric.decryptAndHash(message.sublist(noiseKeyLength));
   }
 
   Future<Uint8List> _writeMessage2(Uint8List payload) async {
@@ -403,19 +238,19 @@ class NoiseHandshake {
   }
 
   Future<Uint8List> _readMessage2(Uint8List message) async {
-    _requireLength(message, _keyLength + _encryptedStaticLength);
+    _requireLength(message, noiseKeyLength + _encryptedStaticLength);
     final ephemeral = await _ensureEphemeral();
-    _remoteEphemeral = Uint8List.fromList(message.sublist(0, _keyLength));
+    _remoteEphemeral = Uint8List.fromList(message.sublist(0, noiseKeyLength));
     await _symmetric.mixHash(_remoteEphemeral!);
     await _symmetric.mixKey(await _dh(ephemeral, _remoteEphemeral!)); // ee
     final remoteStatic = await _symmetric.decryptAndHash(
-      message.sublist(_keyLength, _keyLength + _encryptedStaticLength),
+      message.sublist(noiseKeyLength, noiseKeyLength + _encryptedStaticLength),
     );
     _remoteStatic = remoteStatic;
     await _checkResponderPeerId(remoteStatic);
     await _symmetric.mixKey(await _dh(ephemeral, remoteStatic)); // es
     return _symmetric.decryptAndHash(
-      message.sublist(_keyLength + _encryptedStaticLength),
+      message.sublist(noiseKeyLength + _encryptedStaticLength),
     );
   }
 

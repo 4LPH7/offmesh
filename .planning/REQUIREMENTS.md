@@ -28,20 +28,20 @@ wired into the running app.
 - [ ] **REQ-18**: Delivery receipt shown in the chat thread.
 
 ## Phase 3: BLE link and background relay
-- [ ] **REQ-19**: `BleLink implements MeshTransport` with link-layer segmentation that works at ATT MTU 23.
+- [x] **REQ-19**: `BleLink implements MeshTransport` with link-layer segmentation that works at ATT MTU 23.
 - [ ] **REQ-20**: Dual role: advertise, scan, GATT server, and GATT client at the same time, with Android 12+ Bluetooth permissions.
 - [ ] **REQ-21**: Typed foreground service (`connectedDevice`) that keeps links alive with the screen off.
-- [ ] **REQ-22**: BLE advertisements carry a rotating ID and no static identifier.
+- [x] **REQ-22**: BLE advertisements carry a rotating ID and no static identifier.
 
 ## Phase 4: Operator controls
-- [ ] **REQ-23**: Radio posture switch with per-transport definitions: Silent, Quiet, Normal.
-- [ ] **REQ-24**: Panic wipe as key deletion from the keystore plus memory clear.
+- [x] **REQ-23**: Radio posture switch with per-transport definitions: Silent, Quiet, Normal.
+- [x] **REQ-24**: Panic wipe as key deletion from the keystore plus memory clear.
 - [ ] **REQ-25**: Relay Mode screen: black display, counters, foreground service on.
 
 ## Phase 5: Store-and-forward
-- [ ] **REQ-26**: One-way encryption to a roster member's static key, with its lost properties documented.
-- [ ] **REQ-27**: Custody envelope with expiry and copy budget; exchange of held message IDs on contact.
-- [ ] **REQ-28**: Memory-only envelope store with a fixed cap and expiry pruning.
+- [x] **REQ-26**: One-way encryption to a roster member's static key, with its lost properties documented.
+- [x] **REQ-27**: Custody envelope with expiry and copy budget; exchange of held message IDs on contact.
+- [x] **REQ-28**: Memory-only envelope store with a fixed cap and expiry pruning.
 
 ## Traceability
 
@@ -61,3 +61,9 @@ wired into the running app.
 | REQ-19 to REQ-22 | 3 | 03-00 spike first | Not started |
 | REQ-23 to REQ-25 | 4 | TBD | Not started |
 | REQ-26 to REQ-28 | 5 | TBD | Not started |
+
+## Status notes (2026-11-15)
+- REQ-20 (dual role) is implemented in code but NOT verified on hardware; the GATT and advertising paths have only been reviewed.
+- REQ-21 (foreground service) is NOT implemented. Pocketed phones may be killed with the screen off.
+- REQ-25 (Relay Mode) shows counters and a black screen; the foreground service part is NOT implemented.
+- Device tests in docs/ble_spike.md, docs/operator_tests.md, docs/dtn_tests.md and docs/device_tests.md are NOT RUN.

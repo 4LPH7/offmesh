@@ -6,9 +6,12 @@ import 'package:flutter/foundation.dart';
 import '../core/crypto/identity.dart';
 import '../core/crypto/unit_keys.dart';
 import '../core/mesh/mesh_node.dart';
+import '../core/posture.dart';
 import '../core/protocol/packet.dart';
 import '../core/provisioning/unit_roster.dart';
 import '../transports/lan_manager.dart';
+import 'panic_wipe.dart';
+import 'posture_store.dart';
 import 'secret_store.dart';
 import 'unit_store.dart';
 
@@ -19,6 +22,7 @@ class ChatMessage {
     required this.at,
     this.packetId,
     this.delivered = false,
+    this.queued = false,
   });
 
   final bool outgoing;
@@ -31,6 +35,9 @@ class ChatMessage {
   /// True once the recipient's receipt for [packetId] has arrived.
   final bool delivered;
 
+  /// True while a Quiet-mode message waits for the send-burst button.
+  final bool queued;
+
   ChatMessage asDelivered() => ChatMessage(
     outgoing: outgoing,
     text: text,
@@ -38,6 +45,14 @@ class ChatMessage {
     packetId: packetId,
     delivered: true,
   );
+}
+
+/// An outgoing message held in Quiet mode, with the contact it is for.
+class _Queued {
+  const _Queued(this.contactId, this.message);
+
+  final String contactId;
+  final ChatMessage message;
 }
 
 /// A roster member as the UI shows it.
@@ -79,6 +94,13 @@ class ChatController extends ChangeNotifier {
   int? _listenPort;
   StreamSubscription<ReceivedMessage>? _subscription;
   StreamSubscription<DeliveryReceiptEvent>? _receiptSubscription;
+  final List<_Queued> _queue = [];
+
+  /// The radio posture, shared with [lan], which checks it before every transmission.
+  PostureController get posture => lan.posture;
+
+  /// Outgoing messages held in Quiet mode until [sendBurst].
+  int get queuedCount => _queue.length;
 
   String get myId => node.peerId.hex;
 
@@ -143,6 +165,8 @@ class ChatController extends ChangeNotifier {
     _receiptSubscription = node.receipts.listen(handleReceipt);
     node.start();
     _myFingerprint = await fingerprint(node.identity.publicKey);
+    // Before any LAN start: a Silent phone must not bind a socket on launch.
+    posture.change(await PostureStore.load(store));
     try {
       final unit = await UnitStore.load(store);
       if (unit != null) {
@@ -159,6 +183,7 @@ class ChatController extends ChangeNotifier {
     await _subscription?.cancel();
     await _receiptSubscription?.cancel();
     await lan.stop();
+    _listenPort = null;
     await node.stop();
   }
 
@@ -197,6 +222,10 @@ class ChatController extends ChangeNotifier {
       reportError('Join a unit before linking');
       return;
     }
+    if (posture.current == Posture.silent) {
+      reportError('Silent: no connections. Set Normal or Quiet first');
+      return;
+    }
     try {
       await lan.connect(host, port);
       _lastError = null;
@@ -217,8 +246,26 @@ class ChatController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sends [text], or in Quiet holds it until [sendBurst]. In Silent nothing is handed to
+  /// the node: MeshNode would queue it and flush it when a link returns.
   Future<void> send(String contactId, String text) async {
     final id = _parseId(contactId);
+    if (posture.current == Posture.silent) {
+      reportError('Silent: nothing is sent. Set Normal or Quiet first');
+      return;
+    }
+    if (posture.current == Posture.quiet) {
+      final held = ChatMessage(
+        outgoing: true,
+        text: text,
+        at: _clock(),
+        queued: true,
+      );
+      _queue.add(_Queued(id, held));
+      _lastError = null;
+      _append(id, held);
+      return;
+    }
     try {
       final packetId = await node.sendText(
         _bytesOf(id),
@@ -238,6 +285,105 @@ class ChatController extends ChangeNotifier {
       _lastError = error.message;
       notifyListeners();
     }
+  }
+
+  /// Quiet mode's send-burst action: sends every held message in order. A message that
+  /// the node refuses goes back on the queue, so nothing is dropped silently.
+  Future<void> sendBurst() async {
+    if (posture.current == Posture.silent) {
+      reportError('Silent: nothing is sent. Set Normal or Quiet first');
+      return;
+    }
+    final pending = List.of(_queue);
+    _queue.clear();
+    for (final item in pending) {
+      try {
+        final packetId = await node.sendText(
+          _bytesOf(item.contactId),
+          Uint8List.fromList(utf8.encode(item.message.text)),
+        );
+        _replace(
+          item.contactId,
+          item.message,
+          ChatMessage(
+            outgoing: true,
+            text: item.message.text,
+            at: item.message.at,
+            packetId: packetId,
+          ),
+        );
+      } on StateError catch (error) {
+        _queue.add(item);
+        _lastError = error.message;
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Changes the radio posture. The radios change first, so a failed save never leaves
+  /// transmission on; the new posture is then saved, and a failed save is reported.
+  Future<void> setPosture(Posture next) async {
+    posture.change(next);
+    if (next == Posture.silent) {
+      await lan.stop();
+      _listenPort = null;
+    } else if (provisioned) {
+      try {
+        _listenPort = await lan.start();
+      } on StateError {
+        // Silent was chosen again while the socket was binding.
+        _listenPort = null;
+      }
+    }
+    try {
+      await PostureStore.save(store, next);
+      _lastError = null;
+    } catch (_) {
+      _lastError = 'Posture changed for this session but could not be saved';
+    }
+    notifyListeners();
+  }
+
+  /// Deletes every stored key, stops all transports and clears memory. Returns false, with
+  /// [lastError] set, when a key could not be deleted. The caller must then rebuild the
+  /// controller: this node's identity is wiped and must not be used again.
+  Future<bool> panicWipe() async {
+    // Keys go first. A transport that fails to stop must not stop the deletes.
+    var deleted = true;
+    try {
+      await wipeStoredSecrets(store);
+    } catch (_) {
+      deleted = false;
+    }
+    try {
+      await stop();
+    } catch (_) {
+      // Ignored: the caller discards this controller either way.
+    }
+    if (!deleted) {
+      _lastError =
+          'Wipe incomplete: could not delete every stored key. Try again';
+      notifyListeners();
+      return false;
+    }
+    _threads.clear();
+    _queue.clear();
+    _unit = null;
+    _members = const [];
+    _myFingerprint = '';
+    _selected = null;
+    _listenPort = null;
+    _lastError = null;
+    posture.change(Posture.normal);
+    notifyListeners();
+    return true;
+  }
+
+  void _replace(String contactId, ChatMessage old, ChatMessage next) {
+    final thread = _threads[contactId];
+    if (thread == null) return;
+    final index = thread.indexWhere((m) => identical(m, old));
+    if (index >= 0) thread[index] = next;
   }
 
   /// Messages from senders outside the roster are dropped.
@@ -315,8 +461,10 @@ class ChatController extends ChangeNotifier {
     if (_selected != null && !contacts.contains(_selected)) _selected = null;
   }
 
+  /// Starts listening unless Silent. Every path that starts LAN goes through here.
   Future<void> _startLan() async {
-    _listenPort ??= await lan.start();
+    if (posture.current == Posture.silent) return;
+    _listenPort = await lan.start();
   }
 
   void _append(String contactId, ChatMessage message) {

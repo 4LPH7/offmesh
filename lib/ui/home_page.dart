@@ -1,13 +1,74 @@
 import 'package:flutter/material.dart';
 
 import '../app/chat_controller.dart';
+import '../core/posture.dart';
+import 'relay_screen.dart';
 import 'unit_widgets.dart';
+
+/// Asks for the word WIPE. Pops true only when it has been typed and the button pressed.
+class _WipeDialog extends StatefulWidget {
+  const _WipeDialog();
+
+  @override
+  State<_WipeDialog> createState() => _WipeDialogState();
+}
+
+class _WipeDialogState extends State<_WipeDialog> {
+  final _typed = TextEditingController();
+
+  @override
+  void dispose() {
+    _typed.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Panic wipe?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Deletes this phone\'s keys, roster and messages, and stops all '
+            'radios. The phone must be joined to the unit again. This cannot be undone.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            key: const Key('wipe-confirm-field'),
+            controller: _typed,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(hintText: 'Type WIPE'),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('wipe-confirm-button'),
+          onPressed: _typed.text == 'WIPE'
+              ? () => Navigator.of(context).pop(true)
+              : null,
+          child: const Text('Wipe'),
+        ),
+      ],
+    );
+  }
+}
 
 /// Single screen for the test build: my identity, the unit roster, neighbours, and one chat thread.
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.controller});
+  const HomePage({super.key, required this.controller, this.onPanicWipe});
 
   final ChatController controller;
+
+  /// Runs after a confirmed panic wipe in place of [ChatController.panicWipe], so the
+  /// caller can rebuild the controller with a new identity.
+  final Future<void> Function()? onPanicWipe;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -24,6 +85,29 @@ class _HomePageState extends State<HomePage> {
     _port.dispose();
     _message.dispose();
     super.dispose();
+  }
+
+  /// Two steps: a dialog that accepts the wipe only after the word WIPE is typed.
+  Future<void> _confirmWipe() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => const _WipeDialog(),
+    );
+    if (confirmed != true) return;
+    final onWipe = widget.onPanicWipe;
+    if (onWipe != null) {
+      await onWipe();
+    } else {
+      await widget.controller.panicWipe();
+    }
+  }
+
+  void _openRelay() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => RelayScreen(controller: widget.controller),
+      ),
+    );
   }
 
   Future<void> _connect() async {
@@ -106,6 +190,49 @@ class _HomePageState extends State<HomePage> {
                 Text(
                   'Listening on port ${c.listenPort ?? '-'} · '
                   'direct neighbours: ${c.linkedNeighbours.length}',
+                ),
+                const Divider(height: 32),
+                const Text(
+                  'Radio posture',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SegmentedButton<Posture>(
+                  key: const Key('posture-selector'),
+                  segments: const [
+                    ButtonSegment(value: Posture.silent, label: Text('Silent')),
+                    ButtonSegment(value: Posture.quiet, label: Text('Quiet')),
+                    ButtonSegment(value: Posture.normal, label: Text('Normal')),
+                  ],
+                  selected: {c.posture.current},
+                  onSelectionChanged: (selection) =>
+                      c.setPosture(selection.first),
+                ),
+                if (c.posture.current == Posture.quiet) ...[
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    key: const Key('send-burst-button'),
+                    onPressed: c.queuedCount == 0 ? null : c.sendBurst,
+                    child: Text('Send burst (${c.queuedCount} held)'),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    OutlinedButton(
+                      key: const Key('relay-mode-button'),
+                      onPressed: _openRelay,
+                      child: const Text('Relay Mode'),
+                    ),
+                    OutlinedButton(
+                      key: const Key('panic-wipe-button'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.error,
+                      ),
+                      onPressed: _confirmWipe,
+                      child: const Text('Panic wipe'),
+                    ),
+                  ],
                 ),
                 const Divider(height: 32),
                 const Text('Connect to a neighbour (IP and port)'),
@@ -197,7 +324,13 @@ class _HomePageState extends State<HomePage> {
                                 children: [
                                   Flexible(child: Text('Me: ${message.text}')),
                                   const SizedBox(width: 4),
-                                  message.delivered
+                                  message.queued
+                                      ? const Icon(
+                                          Icons.schedule,
+                                          size: 16,
+                                          semanticLabel: 'Held',
+                                        )
+                                      : message.delivered
                                       ? const Icon(
                                           Icons.done_all,
                                           size: 16,

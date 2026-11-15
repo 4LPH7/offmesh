@@ -130,7 +130,7 @@ Cut or parked so they stop reappearing. Each needs a stated reason to return.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Protocol core | 5/5 | Complete | 2026-11-14 |
-| 2. Sealed LAN chat | 0/5 | Not started | - |
-| 3. BLE link and relay | 0/TBD | Not started | - |
-| 4. Operator controls | 0/TBD | Not started | - |
-| 5. Store-and-forward | 0/TBD | Not started | - |
+| 2. Sealed LAN chat | 5/5 | Built; device test NOT RUN | - |
+| 3. BLE link and relay | 1/2 | Built with fakes; spike NOT RUN; no foreground service | - |
+| 4. Operator controls | 1/1 | Built; device checks NOT RUN | - |
+| 5. Store-and-forward | 2/2 | Built; device test NOT RUN | - |

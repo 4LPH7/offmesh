@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import '../core/crypto/rotating_id.dart';
 import '../core/crypto/unit_keys.dart';
 import '../core/mesh/mesh_node.dart';
+import '../core/posture.dart';
 import '../core/protocol/sealed_envelope.dart';
 import 'lan_link.dart';
 
@@ -40,9 +41,14 @@ class LanManager {
     this.linkIdleTimeout = defaultLinkIdleTimeout,
     this.dialBackoff = _dialBackoff,
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
+    PostureController? posture,
+  }) : _clock = clock ?? DateTime.now,
+       posture = posture ?? PostureController();
 
   final MeshNode node;
+
+  /// Every transmission here checks this first. ChatController changes it.
+  final PostureController posture;
 
   /// Beacons are sent to this UDP port on the local broadcast address. 0 disables them.
   final int beaconPort;
@@ -96,19 +102,52 @@ class LanManager {
   _Unit get _requireUnit =>
       _unit ?? (throw StateError('LanManager is not configured with a unit'));
 
-  /// Listens for links on an ephemeral TCP port and returns that port.
+  /// The TCP port this phone listens on, or null when it is not listening.
+  int? get listenPort => _server?.port;
+
+  /// True while the beacon listener is bound. Tests use it to check that Silent leaves
+  /// no UDP socket behind.
+  bool get beaconsRunning => _beaconListener != null;
+
+  /// Listens for links on an ephemeral TCP port and returns that port. Does nothing and
+  /// returns the current port when already listening. Refused in Silent.
   Future<int> start() async {
     _requireUnit;
+    if (posture.current == Posture.silent) {
+      throw StateError('Silent: not listening');
+    }
+    final running = _server;
+    if (running != null) return running.port;
+    final generation = _generation;
     final server = await ServerSocket.bind(InternetAddress.anyIPv4, 0);
+    // Silent (or a stop) during the bind must not leave a listener up.
+    if (_isStale(generation)) {
+      await server.close();
+      throw StateError('Silent: not listening');
+    }
     _server = server;
     server.listen((socket) => unawaited(_adopt(socket, isDialer: false)));
-    if (beaconPort > 0) await _startBeacons();
+    if (beaconPort > 0) await _startBeacons(generation);
+    // Silent or a stop during the beacon binds. stop() already took the server. Only
+    // a same-generation Silent still needs a stop() here, and a newer generation owns
+    // whatever it set up, so this never touches it.
+    if (_isStale(generation)) {
+      if (generation == _generation) await stop();
+      throw StateError('Silent: not listening');
+    }
     return server.port;
   }
 
-  /// Dials a neighbour by address. Throws if it cannot be reached.
+  /// True once a stop, or Silent, has happened since [generation] was taken.
+  bool _isStale(int generation) =>
+      generation != _generation || posture.current == Posture.silent;
+
+  /// Dials a neighbour by address. Throws if it cannot be reached or in Silent.
   Future<void> connect(String host, int port) async {
     _requireUnit;
+    if (posture.current == Posture.silent) {
+      throw StateError('Silent: not dialing');
+    }
     await _dial(host, port);
   }
 
@@ -116,22 +155,29 @@ class LanManager {
   /// in flight, so nothing made before the call survives it.
   Future<void> stop() async {
     _generation++;
+    // Every handle is taken before the first await. A start() that runs while the
+    // closes below are pending then sees a clean state, and its new listener and links
+    // are never cleared by this call.
+    final links = [..._pending, ..._links.values];
+    final server = _server;
+    final listener = _beaconListener;
+    final sender = _beaconSender;
     _beaconTimer?.cancel();
     _beaconTimer = null;
-    _beaconListener?.close();
     _beaconListener = null;
-    _beaconSender?.close();
     _beaconSender = null;
-    await _server?.close();
     _server = null;
+    _pending.clear();
+    _links.clear();
     _dialing.clear();
     _backingOff.clear();
     _seenBeacons.clear();
-    for (final link in [..._pending, ..._links.values]) {
+    listener?.close();
+    sender?.close();
+    await server?.close();
+    for (final link in links) {
       await link.close();
     }
-    _pending.clear();
-    _links.clear();
   }
 
   Future<Uint8List> _ownRotatingId(_Unit unit) =>
@@ -153,7 +199,7 @@ class LanManager {
     final generation = _generation;
     final unit = _requireUnit;
     final localId = await _ownRotatingId(unit);
-    if (generation != _generation) {
+    if (generation != _generation || posture.current == Posture.silent) {
       socket.destroy();
       return false;
     }
@@ -207,19 +253,33 @@ class LanManager {
     return preferred(newer) || !preferred(older);
   }
 
-  Future<void> _startBeacons() async {
-    _beaconListener = await RawDatagramSocket.bind(
+  /// Binds the beacon sockets for [generation]. Each bind is awaited, so handles are
+  /// stored only while that generation is still current. A stale bind closes what it
+  /// opened and stores nothing; the caller in [start] reports the stale state.
+  Future<void> _startBeacons(int generation) async {
+    final listener = await RawDatagramSocket.bind(
       InternetAddress.anyIPv4,
       beaconPort,
       reuseAddress: true,
     );
-    _beaconListener!.listen((event) {
+    if (_isStale(generation)) {
+      listener.close();
+      return;
+    }
+    final sender = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    if (_isStale(generation)) {
+      listener.close();
+      sender.close();
+      return;
+    }
+    sender.broadcastEnabled = true;
+    listener.listen((event) {
       if (event != RawSocketEvent.read) return;
-      final datagram = _beaconListener?.receive();
+      final datagram = listener.receive();
       if (datagram != null) unawaited(_onBeacon(datagram));
     });
-    _beaconSender = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
-    _beaconSender!.broadcastEnabled = true;
+    _beaconListener = listener;
+    _beaconSender = sender;
     _beaconTimer = Timer.periodic(beaconInterval, (_) => _sendBeacon());
     unawaited(_sendBeacon());
   }
@@ -233,6 +293,8 @@ class LanManager {
         ..setRange(0, rotatingIdLength, await _ownRotatingId(unit));
       ByteData.sublistView(plaintext).setUint16(rotatingIdLength, port);
       final sealed = await unit.envelope.seal(plaintext);
+      // Checked after the awaits: a switch to Quiet or Silent during sealing must stop this send.
+      if (posture.current != Posture.normal) return;
       _beaconSender?.send(
         sealed,
         InternetAddress('255.255.255.255'),
@@ -258,7 +320,8 @@ class LanManager {
   Future<void> _onBeacon(Datagram datagram) async {
     final unit = _unit;
     final generation = _generation;
-    if (unit == null) return;
+    // Beacons only drive dials in Normal; Quiet and Silent never dial on their own.
+    if (unit == null || posture.current != Posture.normal) return;
     try {
       final Uint8List plaintext;
       try {
@@ -299,6 +362,11 @@ class LanManager {
           _dialing.remove(peerHex);
           return;
         }
+      }
+      // The posture may have changed while waiting; a dial must not start after Quiet or Silent.
+      if (posture.current != Posture.normal) {
+        _dialing.remove(peerHex);
+        return;
       }
       final linked = await _dial(
         datagram.address.address,

@@ -1,57 +1,65 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 
+import 'app/bootstrap.dart';
 import 'app/chat_controller.dart';
-import 'app/identity_store.dart';
 import 'app/secret_store.dart';
-import 'core/crypto/identity.dart';
-import 'core/mesh/mesh_node.dart';
-import 'transports/lan_manager.dart';
 import 'ui/home_page.dart';
 import 'ui/provisioning_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final store = PlatformSecretStore();
-  final Identity identity;
+  final ChatController controller;
   try {
-    identity = await IdentityStore.loadOrCreate(store);
-  } on IdentityStoreException catch (e) {
+    controller = await buildController(store);
+  } on StartupFailure catch (e) {
     runApp(StartupErrorApp(message: e.message));
     return;
-  } catch (_) {
-    // Platform errors may include file paths; keep the screen generic.
-    runApp(const StartupErrorApp(message: 'secure storage is unavailable'));
-    return;
   }
-  final node = MeshNode(
-    identity: identity,
-    transports: const [],
-    random: Random.secure(),
-  );
-  final controller = ChatController(
-    node: node,
-    lan: LanManager(node: node),
-    store: store,
-  );
-  try {
-    await controller.start();
-  } catch (_) {
-    runApp(
-      const StartupErrorApp(
-        message: 'secure storage or networking is unavailable',
-      ),
-    );
-    return;
+  runApp(OffMeshRoot(store: store, controller: controller));
+}
+
+/// Owns the controller so a panic wipe can replace it. The wiped node's identity is
+/// discarded; the next controller loads a new one from the store.
+class OffMeshRoot extends StatefulWidget {
+  const OffMeshRoot({super.key, required this.store, required this.controller});
+
+  final SecretStore store;
+  final ChatController controller;
+
+  @override
+  State<OffMeshRoot> createState() => _OffMeshRootState();
+}
+
+class _OffMeshRootState extends State<OffMeshRoot> {
+  late ChatController _controller = widget.controller;
+  String? _failure;
+
+  Future<void> _rebuildAfterWipe() async {
+    final wiped = _controller;
+    if (!await wiped.panicWipe()) return;
+    try {
+      final fresh = await buildController(widget.store);
+      setState(() => _controller = fresh);
+    } on StartupFailure catch (e) {
+      setState(() => _failure = e.message);
+    }
+    wiped.dispose();
   }
-  runApp(OffMeshApp(controller: controller));
+
+  @override
+  Widget build(BuildContext context) {
+    final failure = _failure;
+    if (failure != null) return StartupErrorApp(message: failure);
+    return OffMeshApp(controller: _controller, onPanicWipe: _rebuildAfterWipe);
+  }
 }
 
 class OffMeshApp extends StatelessWidget {
-  const OffMeshApp({super.key, required this.controller});
+  const OffMeshApp({super.key, required this.controller, this.onPanicWipe});
 
   final ChatController controller;
+  final Future<void> Function()? onPanicWipe;
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +69,7 @@ class OffMeshApp extends StatelessWidget {
       home: ListenableBuilder(
         listenable: controller,
         builder: (context, _) => controller.provisioned
-            ? HomePage(controller: controller)
+            ? HomePage(controller: controller, onPanicWipe: onPanicWipe)
             : ProvisioningPage(controller: controller),
       ),
     );
