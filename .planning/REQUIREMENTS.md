@@ -66,8 +66,8 @@ wired into the running app.
 | REQ-26 to REQ-28 | 5 | 05-01 | Built and tested as primitives; no app contact flow |
 
 ## Status notes (2026-11-15)
-- Verified in this run: `flutter test` (352 passed), `flutter analyze` (clean), format check (clean), and `flutter build apk --debug` (success).
+- Verified in this run: `flutter test` (353 passed), `flutter analyze` (clean), format check (clean), and `flutter build apk --debug` (success).
 - No Android device is attached; `flutter devices` lists Windows, Chrome and Edge. The BLE spike and all phone procedures are NOT RUN.
 - BLE radio and foreground-service code compile into the APK, but the BLE radio is not attached to app startup; do not count this as dual-role or screen-off verification.
 - Phase 5 Noise K and envelope/store code pass automated tests but have no app contact flow.
-- `flutter build windows --debug` failed because cached CMake points to missing MSVC 14.51 `cl.exe`; installed MSVC 14.52 and ATL headers exist. A fresh build configuration is still unverified.
+- Fresh Windows build and debug launch passed with MSVC 14.52 and ATL; manual provisioning and network acceptance remain NOT RUN.

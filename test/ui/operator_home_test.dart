@@ -51,20 +51,24 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: HomePage(controller: controller)),
     );
+    await tester.tap(find.byKey(const Key('home-tab-controls')));
+    await tester.pump();
     expect(find.byKey(const Key('send-burst-button')), findsNothing);
 
     await tester.runAsync(() => controller.setPosture(Posture.quiet));
     await tester.pump();
 
     expect(find.byKey(const Key('send-burst-button')), findsOneWidget);
-    expect(find.textContaining('Send burst (0 held)'), findsOneWidget);
+    expect(find.text('0 messages held'), findsOneWidget);
 
     final alpha = controller.contacts.single;
     controller.select(alpha);
     await tester.runAsync(() => controller.send(alpha, 'hello'));
     await tester.pump();
 
-    expect(find.textContaining('Send burst (1 held)'), findsOneWidget);
+    expect(find.text('1 message held'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('home-tab-messages')));
+    await tester.pump();
     expect(
       find.byWidgetPredicate((w) => w is Icon && w.semanticLabel == 'Held'),
       findsOneWidget,
@@ -84,6 +88,8 @@ void main() {
         ),
       ),
     );
+    await tester.tap(find.byKey(const Key('home-tab-controls')));
+    await tester.pump();
 
     await tester.ensureVisible(find.byKey(const Key('panic-wipe-button')));
     await tester.tap(find.byKey(const Key('panic-wipe-button')));

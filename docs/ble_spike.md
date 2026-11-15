@@ -23,7 +23,7 @@ real hardware. That needs the procedure below.
 ## Setup
 
 1. Two Android phones (A and B) running the same debug build: `flutter build apk --debug`,
-   with `ANDROID_NDK_HOME=D:/Android/ndk-r28c`. Install on both.
+   with `ANDROID_NDK_HOME` set to the installed NDK root. Install on both.
 2. Provision both phones into one unit (QR), as in phase 2.
 3. Enable Bluetooth on both. Grant Nearby devices permissions when prompted (Android 12+).
    On Android 11 and earlier, grant location permission if the scanner requests it.

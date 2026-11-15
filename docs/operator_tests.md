@@ -19,8 +19,8 @@ Covers REQ-23 (posture), REQ-24 (panic wipe), REQ-25 (Relay Mode). Phase 4 devic
 
 ## Test 1: Silent on phone B for 5 minutes (roadmap device test)
 
-1. On B, open Home, tap Silent in the radio posture selector.
-2. Confirm B shows "Listening on port -".
+1. On B, open the Controls tab and tap Silent in the radio posture selector.
+2. Confirm Controls shows "Listening on port —" and "0 direct links".
 3. Start the Wireshark capture on the PC at the same time as the switch. Run it 5 minutes.
 4. Expected: no UDP datagrams from B's address to 255.255.255.255:47999 or to any port; no TCP
    SYN from or to B; no frames from B on the capture.
@@ -32,24 +32,24 @@ Covers REQ-23 (posture), REQ-24 (panic wipe), REQ-25 (Relay Mode). Phase 4 devic
 
 ## Test 2: Quiet on phone B
 
-1. On B, tap Quiet. Expected: "Send burst (0 held)" appears.
+1. On B, open Controls and tap Quiet. Expected: "0 messages held" and a disabled Send burst button appear.
 2. Capture for 2 minutes. Expected: no beacons from B (UDP port 47999). Open TCP links that
    were already up stay up and show keepalives; that is by design.
-3. On B, send 3 messages to A. Expected: each shows as held and the counter reads
-   "Send burst (3 held)". On A, nothing arrives.
-4. Tap Send burst on B. Expected: the counter returns to 0 and A receives the 3 messages in
+3. Open Messages on B, select A and send 3 messages. Each should appear as Held. On
+   Controls, the counter should read "3 messages held". On A, nothing arrives.
+4. On Controls, tap Send burst on B. Expected: the counter returns to 0 and A receives the 3 messages in
    order with delivered marks on B.
 
 ## Test 3: Silent survives a restart
 
-1. Set B to Silent. Force-stop the app and reopen it.
-2. Expected: the posture selector shows Silent, the phone shows no listening port, and the
-   capture shows no UDP or TCP from B.
+1. In Controls, set B to Silent. Force-stop the app and reopen it.
+2. Open Controls again. Expected: Silent remains selected, no listener port appears, and
+   the capture shows no UDP or TCP from B.
 3. Set B to Normal. Expected: a listening port appears and beacons resume.
 
 ## Test 4: Panic wipe on phone B
 
-1. On B, tap Panic wipe. Expected: a dialog. The Wipe button is disabled.
+1. On B, open Controls and tap Panic wipe. Expected: a dialog. The Wipe button is disabled.
 2. Type a word other than WIPE. Expected: Wipe stays disabled.
 3. Type WIPE and tap Wipe. Expected: the phone returns to the provisioning screen with no
    members and no messages.
@@ -63,7 +63,7 @@ Covers REQ-23 (posture), REQ-24 (panic wipe), REQ-25 (Relay Mode). Phase 4 devic
 
 ## Test 5: Relay Mode and foreground service
 
-1. On B, in Normal, tap Relay Mode. Grant the Android Nearby devices permissions if prompted.
+1. On B, open Controls and, in Normal, tap Open beside Relay Mode. Grant the Android Nearby devices permissions if prompted.
    Expected: a black screen with Forwarded, Suppressed and Links counters, Normal posture,
    and `Background service: running`.
 2. If permission is denied, record the displayed error, grant permission in Android Settings,
@@ -77,7 +77,7 @@ Covers REQ-23 (posture), REQ-24 (panic wipe), REQ-25 (Relay Mode). Phase 4 devic
 5. Unlock B. Confirm Relay Mode still shows the service as running and traffic resumes.
    Optional PC check: run `adb shell dumpsys activity services me.offmesh.offmesh` and save
    the service section with the test result.
-6. Tap Leave. Expected: Home returns and the relay notification/service stops within a few
+6. Tap Leave. Expected: the Messages tab returns and the relay notification/service stops within a few
    seconds. Confirm with the UI status or `dumpsys`.
 
 ## Results log

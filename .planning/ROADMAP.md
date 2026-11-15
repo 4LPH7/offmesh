@@ -25,7 +25,7 @@ Windows PC. Requirement IDs match `REQUIREMENTS.md`, which is the single source.
 **Goal**: A pure-Dart protocol whose frames, once sealed, reveal nothing to an observer without the unit key, proven in simulation.
 **Depends on**: Nothing
 **Requirements**: REQ-01 to REQ-11
-**Status**: Complete. All five plans implemented and tested. Current full suite passes 352 tests. Established encrypted sends use the learned reverse path; sealing and rotating IDs are wired into the app in Phase 2.
+**Status**: Complete. All five plans implemented and tested. Current full suite passes 353 tests. Established encrypted sends use the learned reverse path; sealing and rotating IDs are wired into the app in Phase 2.
 **Success Criteria** (what must be TRUE):
   1. A relay is skipped on every link that already delivered the same packet during the jitter window (per-link suppression; links are point-to-point).
   2. A sealed frame shows no header field in cleartext, fails to open under a wrong key or any flipped bit, and is rejected when older than the freshness window.
@@ -48,7 +48,7 @@ Plans:
 **Goal**: Two phones and a PC chat over a hotspot with every frame sealed and no stable identifier visible to a packet capture.
 **Depends on**: Phase 1
 **Requirements**: REQ-12 to REQ-18
-**Status**: App implementation and automated checks complete. The two-phone/PC capture test is NOT RUN; no Android device is available. Windows build needs a fresh CMake configuration: its cached compiler path names missing MSVC 14.51, while installed MSVC 14.52 and ATL are present.
+**Status**: App implementation and automated checks complete. Messages, Unit and Controls use focused tabs; Android-only Relay Mode and the unwired BLE status are explicit. APK rebuild, fresh Windows build and debug launch passed on 2026-11-15. The two-phone/PC capture and all on-device acceptance remain NOT RUN because no Android device is attached.
 **Success Criteria** (what must be TRUE):
   1. Restarting the app keeps the same identity; private keys are stored through the platform keystore.
   2. A phone with no roster cannot link; a phone provisioned by QR (PC: paste or file) can.

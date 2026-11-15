@@ -1,12 +1,11 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 /// Camera scanning is offered on Android only (ML Kit model bundled in the APK).
-bool get canScanCodes => Platform.isAndroid;
+bool get canScanCodes => defaultTargetPlatform == TargetPlatform.android;
 
 /// A code shown as a QR code plus selectable text with a copy button.
 class CodeView extends StatelessWidget {

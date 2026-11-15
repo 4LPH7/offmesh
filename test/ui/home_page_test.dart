@@ -55,16 +55,50 @@ void main() {
       MaterialApp(home: HomePage(controller: controller)),
     );
 
+    expect(find.text('No contacts yet'), findsNothing);
+    await tester.tap(find.byKey(const Key('home-tab-unit')));
+    await tester.pump();
+
     expect(find.text('My ID'), findsOneWidget);
     expect(find.text(controller.myId), findsOneWidget);
-    expect(find.text('Bravo (this phone)'), findsOneWidget);
+    expect(find.text('Bravo (this device)'), findsOneWidget);
     expect(find.text(alphaPrint), findsOneWidget);
     expect(find.byKey(const Key('share-unit-button')), findsOneWidget);
 
+    await tester.tap(find.byKey(const Key('home-tab-messages')));
+    await tester.pump();
     await tester.tap(find.widgetWithText(ChoiceChip, 'Alpha'));
     await tester.pump();
 
     expect(controller.selectedContact, alpha.peerId.hex);
+  });
+
+  testWidgets('home tabs fit phone, tablet and desktop widths', (tester) async {
+    final (controller, _) = await _setUp(tester);
+    await tester.pumpWidget(
+      MaterialApp(home: HomePage(controller: controller)),
+    );
+
+    for (final size in [
+      const Size(320, 720),
+      const Size(768, 1024),
+      const Size(1440, 900),
+    ]) {
+      tester.view.physicalSize = size;
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'Messages at $size');
+
+      await tester.tap(find.byKey(const Key('home-tab-unit')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'Unit at $size');
+
+      await tester.tap(find.byKey(const Key('home-tab-controls')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'Controls at $size');
+
+      await tester.tap(find.byKey(const Key('home-tab-messages')));
+      await tester.pumpAndSettle();
+    }
   });
 
   testWidgets('the delivered mark appears only after the matching receipt', (
@@ -97,12 +131,13 @@ void main() {
 
     expect(find.byIcon(Icons.done), findsOneWidget);
     expect(find.byIcon(Icons.done_all), findsOneWidget);
-    final delivered = find.ancestor(
-      of: find.byIcon(Icons.done_all),
-      matching: find.byType(Row),
+    expect(find.text('Delivered'), findsOneWidget);
+    expect(find.text('Sent'), findsOneWidget);
+    final latest = find.byKey(
+      ValueKey('message-${controller.thread(alphaId).last.packetId}'),
     );
     expect(
-      find.descendant(of: delivered.first, matching: find.text('Me: two')),
+      find.descendant(of: latest, matching: find.text('two')),
       findsOneWidget,
     );
   });

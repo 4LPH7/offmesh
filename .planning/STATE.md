@@ -24,15 +24,15 @@ See: docs/mission_plan.md (threat model, limits, design decisions)
 Phase: 2 of 5 (Sealed LAN chat on real devices)
 Plan: 5 of 5 (device procedure written; execution NOT RUN)
 Status: Phase 1 is complete. Phase 2 implementation and automated validation pass; device acceptance remains open. Phases 3–5 have partial software implementation, described in ROADMAP.md.
-Last activity: 2026-11-15 — 352 tests pass; analyzer, format check and Android debug APK build pass; Windows build hits a stale CMake MSVC path; no Android device is available.
+Last activity: 2026-11-15 — Messages, Unit and Controls use focused tabs; the composer and connection status are simplified; Relay Mode is Android-only and BLE availability is explicit. Fresh validation: 353 tests pass, analyzer and format checks are clean, APK rebuilt, and Windows clean build plus debug launch pass. No Android device is attached; device acceptance remains NOT RUN.
 
 ## Performance Metrics
 
-- Tests: 352 passing (`flutter test`).
+- Tests: 353 passing (`flutter test`).
 - Lints: clean (`flutter analyze`).
 - Format check: clean (`dart format --output=none --set-exit-if-changed lib test`).
-- Android debug APK builds (`flutter build apk --debug`); NDK path set in `android/local.properties`.
-- Available targets: Windows, Chrome and Edge only. Android device checks cannot run here.
+- Android APK builds require `ANDROID_NDK_HOME` set to the installed NDK for that build process; keep the machine-specific path out of the repo.
+- Fresh Windows debug build and app launch pass. Available targets: Windows, Chrome and Edge; no Android target is connected.
 
 ## Remaining software gaps and device gates
 
@@ -40,7 +40,7 @@ Last activity: 2026-11-15 — 352 tests pass; analyzer, format check and Android
 - Noise K, custody envelope codecs and `EnvelopeStore` are tested primitives; no app contact flow owns or exchanges them.
 - Established encrypted MeshNode sends use the learned reverse path; initial handshakes and receipts intentionally flood.
 - Foreground Relay service and operator UI are implemented, but screen-off and radio behavior still need phone validation.
-- Windows build is unverified from a clean configuration: cached CMake points at absent MSVC 14.51 `cl.exe`; installed MSVC 14.52 and ATL headers are present.
+- Windows clean build and debug launch verified with MSVC 14.52 and ATL. Manual Windows provisioning/network acceptance remains unrun.
 
 ## Accumulated Context
 

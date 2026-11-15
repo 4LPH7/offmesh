@@ -4,7 +4,9 @@ Offline, end-to-end encrypted messaging between stock Android phones. No interne
 server, or extra radio hardware. Built in Flutter. A Windows desktop build exists as a
 LAN test peer.
 
-This is a prototype. Read "Limits" before relying on it.
+This is a prototype. Read "Limits" before relying on it. The app keeps messages,
+unit setup, and radio controls on separate tabs so the main chat stays focused.
+Relay Mode is Android-only; Bluetooth and store-and-forward are not connected to chat yet.
 
 ## Implemented
 
@@ -90,20 +92,20 @@ The APK is written to `build/app/outputs/flutter-apk/app-debug.apk`.
 ## Two-phone test
 
 1. Phone A turns on a Wi-Fi hotspot. Phone B joins it.
-2. On A, create a unit. On B, show B's identity code; on A, use Add member to scan or
-   paste it, then Share unit. On B, scan or paste A's unit code to join.
-3. Compare the fingerprints shown on both phones. Each shows "Listening on port N".
-4. Beacons usually link the phones within a few seconds. If not, on B enter A's IP and
-   port, then Connect.
-5. Select A on B and send a message. It shows two ticks when A's receipt arrives. Reply
-   from A.
+2. On A, create a unit. Open the Unit tab, add B's identity code and share the unit
+   code. On B, scan or paste A's unit code to join.
+3. In the Unit tab on both phones, compare fingerprints and note "Listening on port N".
+4. Beacons usually link the phones within a few seconds. If not, on B open Unit, expand
+   "Connect by address", enter A's IP and port, then connect.
+5. Open Messages, select the other phone and send a message. It shows two ticks when the
+   recipient's receipt arrives.
 6. Turn off mobile data to confirm nothing leaves the local network.
 
 Multi-hop: add a third phone C to the unit, link it to B only, and message C from A.
 
 ## Manual acceptance runbooks
 
-- [Phase 2 LAN and capture test](docs/device_tests.md): detailed; needs two phones, Wireshark and a Windows build. The cached Windows CMake path on this machine needs reconfiguration.
+- [Phase 2 LAN and capture test](docs/device_tests.md): detailed; needs two phones, Wireshark and a Windows build. The Windows clean build now passes; device acceptance remains NOT RUN.
 - [Phase 3 BLE spike](docs/ble_spike.md): NOT RUN; current APK lacks BLE app controls, so a diagnostic harness or BLE integration is required first.
 - [Phase 4 operator tests](docs/operator_tests.md): Silent, Quiet, panic wipe, Relay Mode, and foreground-service steps; BLE posture is not testable until BLE is wired.
 - [Phase 5 store-and-forward test](docs/dtn_tests.md): detailed but blocked until the app owns and exchanges custody envelopes.

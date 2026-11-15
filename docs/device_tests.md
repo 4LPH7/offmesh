@@ -23,17 +23,17 @@ by unit tests only (`test/core/crypto/rotating_id_test.dart` and the LAN tests).
 
 ### Prerequisites
 
-1. Two Android phones (A and B) with a debug build installed:
-   `flutter build apk --debug` (needs `ANDROID_NDK_HOME`), then
-   `adb install -r build/app/outputs/flutter-apk/app-debug.apk` on each.
-2. A Windows PC with the app built by `flutter build windows --debug` or `flutter run -d windows`.
-   On this development machine the existing CMake cache points at missing MSVC 14.51, while
-   MSVC 14.52 and ATL headers are installed. To regenerate that local build cache, open PowerShell
-   in the repo root and run `flutter clean`, `flutter pub get`, then `flutter build windows --debug`.
-   `flutter clean` deletes generated build outputs; they are recreated by the following commands.
-   This clean Windows build has not been run here. If it still fails, run `flutter doctor -v` and
-   confirm Visual Studio has Desktop development with C++, the MSVC x64/x86 tools, CMake tools,
-   and ATL; then retry `flutter build windows --debug`.
+1. Two Android phones (A and B) with the same debug APK installed. Set
+   `$env:ANDROID_NDK_HOME` to the installed NDK root in PowerShell, then run
+   `flutter build apk --debug`. Install with
+   `adb install -r build/app/outputs/flutter-apk/app-debug.apk` on each phone, or copy the APK
+   to each phone and open it there.
+2. A Windows PC running `flutter build windows --debug` or `flutter run -d windows`. The stale
+   MSVC 14.51 CMake cache was reset; a clean Windows build and debug app launch succeeded on
+   2026-11-15 with MSVC 14.52 and ATL. To repeat the reset, run `flutter clean`, `flutter pub get`,
+   then `flutter build windows --debug` from the repo root. `flutter clean` removes generated
+   build outputs, which those commands recreate. Windows manual provisioning and network checks
+   remain NOT RUN.
 3. Wireshark with Npcap on the PC.
 4. Windows Firewall allows the OffMesh app on the network profile the hotspot gets (a new
    hotspot network is often classed as Public). Without that, inbound TCP links and UDP
@@ -76,22 +76,22 @@ moved as text.
 
 7. On each device, type its name (`A`, `B`, `PC`) in "Your name". Each shows its identity
    code (QR and text) and a fingerprint. Write down each device's fingerprint.
-8. On the PC, press "Create unit". The PC moves to the home screen. Note the PC's
-   "My ID" (16 hex characters) and its "Listening on port N".
-9. Copy phone A's identity code text (`OFFM-ID1:...`) to the PC. It is public data, so any
-   channel is acceptable; a USB cable and a text file is the simplest offline one.
-   On the PC, paste it in "Add member" and press "Add".
+8. On the PC, press "Create unit". The app opens the Messages tab. Open the Unit tab
+   from the bottom navigation and note the PC's "My ID" (16 hex characters) and its
+   "Listening on port N".
+9. In the Unit tab on the PC, paste phone A's identity code text (`OFFM-ID1:...`) into
+   "Add a member" and press Add. It is public data, so a USB text file is sufficient.
 10. Do the same for phone B.
-11. On the PC, the member list shows `PC (this phone)`, `A` and `B`. Check that the
-    fingerprints under `A` and `B` equal the ones written down in step 7, by eye.
-12. On the PC, press "Share unit". A QR of the unit code is shown.
+11. In the PC's Unit tab, confirm the member list shows `PC (this device)`, `A` and `B`.
+    Check A and B fingerprints against the values from step 7.
+12. In the PC's Unit tab, press Share. A QR of the unit code is shown.
 13. On phone A, in "Join a unit", press the scan button and scan the PC screen. A reaches
     the home screen.
 14. Do the same on phone B.
-15. On A and on B, check the member list shows all three names, and each fingerprint
-    matches step 7.
-16. On each device, note "My ID" and "Listening on port N". The port is chosen at random
-    on every start, so it must be re-read after any restart.
+15. On A and B, open the Unit tab. Confirm the member list shows all three names and
+    each fingerprint matches step 7.
+16. In the Unit tab on each device, note "My ID" and "Listening on port N". The port is
+    chosen at random on every start, so re-read it after a restart.
 
 The roster must list all three devices before it is shared. A device added after the
 share is unknown to devices holding the older code: they drop its beacons and hellos. If
@@ -100,18 +100,17 @@ a member is added later, share the unit again and re-import it on every other de
 **Linking**
 
 17. Wait up to 15 seconds. Beacons go out every 3 seconds and each device dials the
-    members it hears. Each device's "direct neighbours" count should reach 2.
+    members it hears. The Unit tab's direct-links count should reach 2.
 18. If a count stays below 2, Android may not be delivering broadcast datagrams to the
-    app. Use the manual fallback: in "Connect to a neighbour", enter the other device's IP
-    (step 3) and its port (step 16), and press Connect. Record which links needed the
-    fallback.
+    app. In the Unit tab, expand "Connect by address", enter the other device's IP (step 3)
+    and port (step 16), then press Connect. Record which links needed the fallback.
 
 **Messages and delivered marks (criterion 6, device test)**
 
-19. On A, select contact `B` and send 50 messages `zqx7-AB-01` to `zqx7-AB-50`.
-20. On B, select contact `A` and send 50 messages `zqx7-BA-01` to `zqx7-BA-50`.
-21. On B, select contact `PC` and send 20 messages `zqx7-BP-01` to `zqx7-BP-20`.
-22. On the PC, select contact `B` and send 20 messages `zqx7-PB-01` to `zqx7-PB-20`.
+19. On A, open the Messages tab, select contact `B`, and send 50 messages `zqx7-AB-01` to `zqx7-AB-50`.
+20. On B, open the Messages tab, select contact `A`, and send 50 messages `zqx7-BA-01` to `zqx7-BA-50`.
+21. On B, in Messages, select contact `PC` and send 20 messages `zqx7-BP-01` to `zqx7-BP-20`.
+22. On the PC, in Messages, select contact `B` and send 20 messages `zqx7-PB-01` to `zqx7-PB-20`.
 23. On each receiving thread, count received messages: 50 on B from A, 50 on A from B,
     20 on the PC from B, 20 on B from the PC. Note any missing counter values.
 24. On each sending thread, count double-tick (Delivered) marks against single-tick

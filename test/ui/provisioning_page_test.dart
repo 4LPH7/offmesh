@@ -94,6 +94,8 @@ void main() {
 
     expect(controller.provisioned, isTrue);
     expect(find.byType(HomePage), findsOneWidget);
-    expect(find.text('Alpha (this phone)'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('home-tab-unit')));
+    await tester.pump();
+    expect(find.text('Alpha (this device)'), findsOneWidget);
   });
 }
