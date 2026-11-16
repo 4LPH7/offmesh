@@ -9,6 +9,7 @@ import 'package:offmesh/core/crypto/identity.dart';
 import 'package:offmesh/core/mesh/mesh_node.dart';
 import 'package:offmesh/core/mesh/transport.dart';
 import 'package:offmesh/core/posture.dart';
+import 'package:offmesh/core/voice/tones.dart';
 import 'package:offmesh/core/voice/voice_burst.dart';
 import 'package:offmesh/transports/lan_manager.dart';
 
@@ -105,9 +106,11 @@ void main() {
 
       expect(alice.talking, isFalse);
       expect(mic.recording, isFalse);
-      expect(speaker.samples, voiceFrameSamples * 3);
+      expect(speaker.samples, voiceFrameSamples * 3 + rogerBeep().length);
       expect(speaker.events, ['begin', 'end']);
       expect(bob.speakerOn('#ops'), isNull);
+      expect(bob.lastHeard(alice.myId), isNotNull);
+      expect(alice.lastHeard(bob.myId), isNull);
     },
   );
 

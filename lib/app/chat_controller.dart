@@ -11,6 +11,7 @@ import '../core/posture.dart';
 import '../core/protocol/packet.dart';
 import '../core/provisioning/unit_roster.dart';
 import '../transports/lan_manager.dart';
+import '../core/voice/tones.dart';
 import '../core/voice/voice_burst.dart';
 import 'channel_store.dart';
 import 'voice_audio.dart';
@@ -96,6 +97,7 @@ class ChatController extends ChangeNotifier {
   VoiceBurstSender? _talkSender;
   final Map<String, VoiceBurstReceiver> _receivers = {};
   final Map<String, String> _speakers = {};
+  final Map<String, DateTime> _lastHeard = {};
   Timer? _voiceTicker;
 
   final MeshNode node;
@@ -470,6 +472,7 @@ class ChatController extends ChangeNotifier {
     // Message memory is cleared even when a delete failed: the wipe must not leave chat
     // plaintext in RAM just because a key could not be removed.
     _threads.clear();
+    _lastHeard.clear();
     _channelKeys.clear();
     _channelNames = const [];
     _queue.clear();
@@ -503,6 +506,7 @@ class ChatController extends ChangeNotifier {
   void handleIncoming(ReceivedMessage message) {
     final id = message.senderId.hex;
     if (!contacts.contains(id)) return;
+    _heard(id);
     _append(
       id,
       ChatMessage(
@@ -524,6 +528,7 @@ class ChatController extends ChangeNotifier {
         .firstOrNull;
     final sender = message.senderId.hex;
     if (entry == null || !contacts.contains(sender)) return;
+    _heard(sender);
     final body = message.text;
     if (body.isEmpty) return;
     final channelId = '#${entry.key}';
@@ -555,6 +560,8 @@ class ChatController extends ChangeNotifier {
       onSpeaker: (speaker) {
         if (speaker == null) {
           _speakers.remove(channelId);
+          // Roger beep: the burst is over and the channel is free.
+          playback?.push(rogerBeep());
           unawaited(playback?.end());
         } else {
           _speakers[channelId] = nameOf(speaker);
@@ -564,6 +571,12 @@ class ChatController extends ChangeNotifier {
       },
     ),
   );
+
+  /// When this phone last received anything from member [peerId] (PeerID hex): a 1:1
+  /// message or any channel text or voice frame. Null if never in this session.
+  DateTime? lastHeard(String peerId) => _lastHeard[peerId];
+
+  void _heard(String peerId) => _lastHeard[peerId] = _clock();
 
   /// Who is talking on [channelId] right now, by name; null when nobody is.
   String? speakerOn(String channelId) => _speakers[channelId];

@@ -17,14 +17,14 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 See: docs/mission_plan.md (threat model, limits, design decisions)
 
 **Core value:** Offline, end-to-end encrypted phone-to-phone messaging for a pre-provisioned unit, with sealed frames and operator-controlled emissions.
-**Current focus:** Phases 1-5 are built in software; device acceptance tests are NOT RUN. Next software work is Phase 6 (channels and push-to-talk), starting with the audio spike 06-00. Phases 7 (internet mode) and 8 (minimal UI) follow.
+**Current focus:** Phases 1-6 are built in software; device acceptance tests are NOT RUN. Next: Phase 7 (internet mode through a sealed-frame relay), then Phase 8 (minimal UI).
 
 ## Current Position
 
 Phase: 2 of 5 (Sealed LAN chat on real devices)
 Plan: 5 of 5 (device procedure written; execution NOT RUN)
 Status: Phase 1 is complete. Phase 2 implementation and automated validation pass; device acceptance remains open. Phases 3–5 have partial software implementation, described in ROADMAP.md.
-Last activity: 2026-11-16 — Plan 06-02 built: push-to-talk voice bursts on channels (ADPCM, 30 s cap, one speaker, posture gates). Earlier: Plan 06-01 built: unit channels with group text (#name conversations, sealed broadcast packets, per-sender replay window). Earlier: Roadmap extended to eight phases: channels and push-to-talk (6), internet mode through a sealed-frame relay (7), minimal one-screen UI (8); REQ-29 to REQ-40 added. Before that: Messages, Unit and Controls use focused tabs; the composer and connection status are simplified; Relay Mode is Android-only and BLE availability is explicit. Fresh validation: 353 tests pass, analyzer and format checks are clean, APK rebuilt, and Windows clean build plus debug launch pass. No Android device is attached; device acceptance remains NOT RUN.
+Last activity: 2026-11-16 — Plan 06-03 built: roger beep and last-heard per member; Phase 6 code complete (device runs NOT RUN). Earlier: Plan 06-02 built: push-to-talk voice bursts on channels (ADPCM, 30 s cap, one speaker, posture gates). Earlier: Plan 06-01 built: unit channels with group text (#name conversations, sealed broadcast packets, per-sender replay window). Earlier: Roadmap extended to eight phases: channels and push-to-talk (6), internet mode through a sealed-frame relay (7), minimal one-screen UI (8); REQ-29 to REQ-40 added. Before that: Messages, Unit and Controls use focused tabs; the composer and connection status are simplified; Relay Mode is Android-only and BLE availability is explicit. Fresh validation: 353 tests pass, analyzer and format checks are clean, APK rebuilt, and Windows clean build plus debug launch pass. No Android device is attached; device acceptance remains NOT RUN.
 
 ## Performance Metrics
 

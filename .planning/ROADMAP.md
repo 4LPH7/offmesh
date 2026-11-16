@@ -18,7 +18,7 @@ Windows PC. Requirement IDs match `REQUIREMENTS.md`, which is the single source.
 - [ ] **Phase 3: BLE link and background relay** - A BLE transport behind the existing `MeshTransport` interface, kept alive by a foreground service.
 - [ ] **Phase 4: Operator controls** - Radio posture switch, panic wipe, Relay Mode screen.
 - [ ] **Phase 5: Store-and-forward** - Messages for an offline recipient are carried by other phones.
-- [ ] **Phase 6: Channels and push-to-talk** - Unit channels for group text and hold-to-talk voice bursts over LAN.
+- [x] **Phase 6: Channels and push-to-talk** - Unit channels for group text and hold-to-talk voice bursts over LAN.
 - [ ] **Phase 7: Internet mode** - Members reach each other over the internet through a relay that sees only sealed frames, or by direct IP.
 - [ ] **Phase 8: Minimal UI** - One talk screen with a large push-to-talk button; everything else one tap away.
 
@@ -137,7 +137,7 @@ Plans:
 - [x] 06-00: Spike: `record` (capture) + `flutter_soloud` (playback) + pure-Dart IMA ADPCM 8 kHz. Android and Windows builds pass on branch `spike/audio`; device latency run NOT RUN. See `docs/audio_spike.md`.
 - [x] 06-01: Channel keys (HKDF from unit secret and channel name), broadcast packet type `channel` (0x05) encrypted under the channel key, 60 s replay window per sender, group text in the Messages tab. Device check NOT RUN.
 - [x] 06-02: Voice bursts: IMA ADPCM 8 kHz, 40 ms frames inside channel packets, 30 s cap, reorder buffer, one speaker per channel, posture gates, hold-to-talk button. Device run NOT RUN.
-- [ ] 06-03: Roger beep, last-heard indicator (posture gates already built in 06-02).
+- [x] 06-03: Roger beep (150 ms, generated locally when an incoming burst ends) and per-member "Heard … ago" in the Unit tab. Not heard on a device yet.
 
 ### Phase 7: Internet mode
 **Goal**: Two members in different places talk and text when both have internet, with the same keys and no accounts.
@@ -218,6 +218,6 @@ Cut or parked so they stop reappearing. Each needs a stated reason to return.
 | 3. BLE link and relay | 1/2 | Provisional link/radio built; spike NOT RUN; app wiring incomplete | - |
 | 4. Operator controls | 1/1 | Software built; BLE posture and device checks open | - |
 | 5. Store-and-forward | 1/1 | Primitives built; app integration and device test open | - |
-| 6. Channels and push-to-talk | 3/4 | Channel text and push-to-talk built; device runs NOT RUN | - |
+| 6. Channels and push-to-talk | 4/4 | Built; device runs NOT RUN | - |
 | 7. Internet mode | 0/3 | Not started | - |
 | 8. Minimal UI | 0/2 | Not started | - |

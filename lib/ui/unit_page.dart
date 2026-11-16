@@ -1,3 +1,4 @@
+import '../core/voice/tones.dart';
 import 'package:flutter/material.dart';
 
 import '../app/chat_controller.dart';
@@ -199,9 +200,20 @@ class _UnitPageState extends State<UnitPage> {
             title: Text(
               member.isSelf ? '${member.name} (this device)' : member.name,
             ),
-            subtitle: SelectableText(
-              member.fingerprint,
-              style: const TextStyle(fontFamily: 'monospace'),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SelectableText(
+                  member.fingerprint,
+                  style: const TextStyle(fontFamily: 'monospace'),
+                ),
+                if (!member.isSelf)
+                  Text(
+                    _heardLabel(controller.lastHeard(member.peerId)),
+                    key: Key('last-heard-${member.peerId}'),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+              ],
             ),
           ),
         const SizedBox(height: 8),
@@ -244,3 +256,7 @@ class _ErrorText extends StatelessWidget {
     );
   }
 }
+
+String _heardLabel(DateTime? at) => at == null
+    ? 'Not heard yet'
+    : 'Heard ${heardAgo(DateTime.now().difference(at))}';
