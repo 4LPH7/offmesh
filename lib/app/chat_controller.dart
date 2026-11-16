@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/channel/channel_crypto.dart';
 import '../core/crypto/identity.dart';
 import '../core/crypto/unit_keys.dart';
 import '../core/mesh/mesh_node.dart';
@@ -10,6 +11,7 @@ import '../core/posture.dart';
 import '../core/protocol/packet.dart';
 import '../core/provisioning/unit_roster.dart';
 import '../transports/lan_manager.dart';
+import 'channel_store.dart';
 import 'panic_wipe.dart';
 import 'posture_store.dart';
 import 'secret_store.dart';
@@ -23,7 +25,11 @@ class ChatMessage {
     this.packetId,
     this.delivered = false,
     this.queued = false,
+    this.from,
   });
+
+  /// Sender name on a channel message from someone else; null in 1:1 threads.
+  final String? from;
 
   final bool outgoing;
   final String text;
@@ -94,7 +100,13 @@ class ChatController extends ChangeNotifier {
   int? _listenPort;
   StreamSubscription<ReceivedMessage>? _subscription;
   StreamSubscription<DeliveryReceiptEvent>? _receiptSubscription;
+  StreamSubscription<ChannelMessage>? _channelSubscription;
   final List<_Queued> _queue = [];
+
+  /// Joined channels by normalized name. Keys follow the unit secret, so they are
+  /// re-derived whenever the unit changes.
+  final Map<String, ChannelKey> _channelKeys = {};
+  List<String> _channelNames = const [];
 
   /// The radio posture, shared with [lan], which checks it before every transmission.
   PostureController get posture => lan.posture;
@@ -119,17 +131,28 @@ class ChatController extends ChangeNotifier {
       if (!m.isSelf) m.peerId,
   ];
 
-  String nameOf(String peerId) => _members
-      .firstWhere(
-        (m) => m.peerId == peerId,
-        orElse: () => MemberInfo(
-          name: peerId,
-          peerId: peerId,
-          fingerprint: '',
-          isSelf: false,
-        ),
-      )
-      .name;
+  /// Joined channels as conversation IDs: '#' plus the channel name.
+  List<String> get channels => [for (final name in _channelNames) '#$name'];
+
+  /// Everything the conversation picker shows: channels first, then members.
+  List<String> get conversations => [...channels, ...contacts];
+
+  static bool isChannel(String conversationId) =>
+      conversationId.startsWith('#');
+
+  String nameOf(String peerId) => isChannel(peerId)
+      ? peerId
+      : _members
+            .firstWhere(
+              (m) => m.peerId == peerId,
+              orElse: () => MemberInfo(
+                name: peerId,
+                peerId: peerId,
+                fingerprint: '',
+                isSelf: false,
+              ),
+            )
+            .name;
 
   /// The unit code to share as QR or text; null when unprovisioned.
   String? get unitCode => _unit?.toText();
@@ -163,6 +186,7 @@ class ChatController extends ChangeNotifier {
   Future<void> start() async {
     _subscription = node.messages.listen(handleIncoming);
     _receiptSubscription = node.receipts.listen(handleReceipt);
+    _channelSubscription = node.channelMessages.listen(handleChannelMessage);
     node.start();
     _myFingerprint = await fingerprint(node.identity.publicKey);
     // Before any LAN start: a Silent phone must not bind a socket on launch.
@@ -182,9 +206,55 @@ class ChatController extends ChangeNotifier {
   Future<void> stop() async {
     await _subscription?.cancel();
     await _receiptSubscription?.cancel();
+    await _channelSubscription?.cancel();
     await lan.stop();
     _listenPort = null;
     await node.stop();
+  }
+
+  /// Joins channel [name] and opens its thread. Every unit member who joins the same
+  /// name (case and surrounding spaces ignored) shares the channel.
+  Future<bool> joinChannel(String name) => _guard(() async {
+    final unit = _unit;
+    if (unit == null) throw const _UserError('Join a unit first');
+    final clean = _channelName(name);
+    if (!_channelKeys.containsKey(clean)) {
+      if (_channelNames.length >= maxJoinedChannels) {
+        throw const _UserError('Leave a channel before joining another');
+      }
+      final names = [..._channelNames, clean];
+      await ChannelStore.save(store, names);
+      final key = await ChannelKey.derive(unit.unitSecret, clean);
+      node.joinChannel(key);
+      _channelKeys[clean] = key;
+      _channelNames = List.unmodifiable(names);
+    }
+    _selected = '#$clean';
+  });
+
+  /// Leaves a channel by its conversation ID ('#name') and forgets its thread.
+  Future<bool> leaveChannel(String conversationId) => _guard(() async {
+    final clean = conversationId.substring(1);
+    final key = _channelKeys[clean];
+    if (key == null) return;
+    final names = [
+      for (final n in _channelNames)
+        if (n != clean) n,
+    ];
+    await ChannelStore.save(store, names);
+    node.leaveChannel(key);
+    _channelKeys.remove(clean);
+    _channelNames = List.unmodifiable(names);
+    _threads.remove(conversationId);
+    if (_selected == conversationId) _selected = null;
+  });
+
+  static String _channelName(String name) {
+    try {
+      return normalizeChannelName(name);
+    } on ChannelFormatException catch (e) {
+      throw _UserError(e.message);
+    }
   }
 
   /// Creates a new unit with this phone as its only member.
@@ -249,7 +319,7 @@ class ChatController extends ChangeNotifier {
   /// Sends [text], or in Quiet holds it until [sendBurst]. In Silent nothing is handed to
   /// the node: MeshNode would queue it and flush it when a link returns.
   Future<void> send(String contactId, String text) async {
-    final id = _parseId(contactId);
+    final id = isChannel(contactId) ? contactId : _parseId(contactId);
     if (posture.current == Posture.silent) {
       reportError('Silent: nothing is sent. Set Normal or Quiet first');
       return;
@@ -267,8 +337,8 @@ class ChatController extends ChangeNotifier {
       return;
     }
     try {
-      final packetId = await node.sendText(
-        _bytesOf(id),
+      final packetId = await _dispatch(
+        id,
         Uint8List.fromList(utf8.encode(text)),
       );
       _lastError = null;
@@ -305,8 +375,8 @@ class ChatController extends ChangeNotifier {
         break;
       }
       try {
-        final packetId = await node.sendText(
-          _bytesOf(item.contactId),
+        final packetId = await _dispatch(
+          item.contactId,
           Uint8List.fromList(utf8.encode(item.message.text)),
         );
         _replace(
@@ -376,6 +446,8 @@ class ChatController extends ChangeNotifier {
     // Message memory is cleared even when a delete failed: the wipe must not leave chat
     // plaintext in RAM just because a key could not be removed.
     _threads.clear();
+    _channelKeys.clear();
+    _channelNames = const [];
     _queue.clear();
     if (!deleted) {
       // The radios are already off on purpose: nothing arrives until the app restarts.
@@ -419,6 +491,51 @@ class ChatController extends ChangeNotifier {
 
   /// Marks the sent message with the receipt's packet ID delivered, but only in the
   /// thread of the peer that sent the receipt. Anything else is ignored.
+  /// Channel messages from senders outside the roster, or on channels this phone left,
+  /// are dropped.
+  void handleChannelMessage(ChannelMessage message) {
+    final tag = message.channelTag.hex;
+    final entry = _channelKeys.entries
+        .where((e) => e.value.tagHex == tag)
+        .firstOrNull;
+    final sender = message.senderId.hex;
+    if (entry == null || !contacts.contains(sender)) return;
+    _append(
+      '#${entry.key}',
+      ChatMessage(
+        outgoing: false,
+        text: utf8.decode(message.text, allowMalformed: true),
+        at: _clock(),
+        from: nameOf(sender),
+      ),
+    );
+  }
+
+  /// Sends to a member (PeerID hex) or a channel ('#name').
+  Future<int> _dispatch(String conversationId, Uint8List bytes) {
+    if (!isChannel(conversationId)) {
+      return node.sendText(_bytesOf(conversationId), bytes);
+    }
+    final key = _channelKeys[conversationId.substring(1)];
+    if (key == null) throw StateError('Join $conversationId before sending');
+    return node.sendChannel(key, bytes);
+  }
+
+  /// Channel keys depend on the unit secret: derive them again for the current unit.
+  Future<void> _rejoinChannels(List<int> unitSecret) async {
+    for (final key in _channelKeys.values) {
+      node.leaveChannel(key);
+    }
+    _channelKeys.clear();
+    final names = await ChannelStore.load(store);
+    for (final name in names) {
+      final key = await ChannelKey.derive(unitSecret, name);
+      node.joinChannel(key);
+      _channelKeys[key.name] = key;
+    }
+    _channelNames = List.unmodifiable(_channelKeys.keys);
+  }
+
   void handleReceipt(DeliveryReceiptEvent event) {
     final thread = _threads[event.peerId.hex];
     if (thread == null) return;
@@ -436,6 +553,9 @@ class ChatController extends ChangeNotifier {
       _lastError = null;
       return true;
     } on RosterFormatException catch (e) {
+      _lastError = e.message;
+      return false;
+    } on _UserError catch (e) {
       _lastError = e.message;
       return false;
     } catch (_) {
@@ -475,7 +595,10 @@ class ChatController extends ChangeNotifier {
       for (final m in roster.members) m.publicKey,
     ]);
     _unit = roster;
-    if (_selected != null && !contacts.contains(_selected)) _selected = null;
+    await _rejoinChannels(roster.unitSecret);
+    if (_selected != null && !conversations.contains(_selected)) {
+      _selected = null;
+    }
   }
 
   /// Starts listening unless Silent. Every path that starts LAN goes through here.
@@ -504,4 +627,11 @@ class ChatController extends ChangeNotifier {
     }
     return out;
   }
+}
+
+/// A refusal to show the user as is (no platform detail inside).
+class _UserError implements Exception {
+  const _UserError(this.message);
+
+  final String message;
 }

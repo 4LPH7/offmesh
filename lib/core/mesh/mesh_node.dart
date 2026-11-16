@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
+import '../channel/channel_crypto.dart';
 import '../crypto/identity.dart';
 import '../crypto/noise_xx.dart';
+import '../crypto/replay_window.dart';
 import '../protocol/delivery_ack.dart';
 import '../protocol/fragmentation.dart';
 import '../protocol/packet.dart';
@@ -28,6 +30,26 @@ class ReceivedMessage {
   final Uint8List senderId;
   final Uint8List plaintext;
 }
+
+/// A message on a joined channel. [channelTag] names the channel; [senderId] is the
+/// claimed sender (any channel member can claim any ID, see [ChannelKey]).
+class ChannelMessage {
+  const ChannelMessage({
+    required this.channelTag,
+    required this.senderId,
+    required this.text,
+  });
+
+  final Uint8List channelTag;
+  final Uint8List senderId;
+  final Uint8List text;
+}
+
+/// Window of sender counters (milliseconds) accepted out of order on a channel.
+const int channelReplayWindow = 60000;
+
+/// Senders remembered per node across all channels; the oldest is forgotten first.
+const int maxChannelSenders = 256;
 
 /// A receipt from [peerId]: the message sent with [DeliveryReceipt.packetId] arrived whole.
 class DeliveryReceiptEvent {
@@ -91,8 +113,55 @@ class MeshNode {
   final Map<String, NoiseHandshake> _responders = {};
   final Map<String, List<_QueuedMessage>> _queues = {};
   final Reassembler _reassembler = Reassembler();
+  final StreamController<ChannelMessage> _channelInbox =
+      StreamController<ChannelMessage>.broadcast();
+  final Map<String, ChannelKey> _channels = {};
+  // Insertion-ordered: the first key is the sender heard from longest ago.
+  final Map<String, ReplayWindow> _channelReplay = {};
+  int _channelCounter = 0;
 
   Uint8List get peerId => identity.peerId;
+
+  /// Messages on channels this node has joined.
+  Stream<ChannelMessage> get channelMessages => _channelInbox.stream;
+
+  /// Starts accepting messages on [channel]. Packets for other channels are still relayed.
+  void joinChannel(ChannelKey channel) => _channels[channel.tagHex] = channel;
+
+  void leaveChannel(ChannelKey channel) => _channels.remove(channel.tagHex);
+
+  /// Sends [text] to everyone on [channel]. There is no per-member handshake and no
+  /// receipt; the message floods like a broadcast. Returns the packet ID.
+  Future<int> sendChannel(
+    ChannelKey channel,
+    Uint8List text, {
+    int ttl = maxTtl,
+  }) {
+    final packetId = _nextPacketId();
+    // Milliseconds since epoch, but always increasing, so the receiver's replay window
+    // accepts each message once even after this phone restarts.
+    _channelCounter = max(_channelCounter + 1, _clock().millisecondsSinceEpoch);
+    final counter = _channelCounter;
+    return _serially(() async {
+      final blob = await sealChannelMessage(
+        channel,
+        senderId: identity.peerId,
+        counter: counter,
+        text: text,
+      );
+      final fragments = Fragmenter().fragment(
+        type: PacketType.channel,
+        ttl: ttl,
+        packetId: packetId,
+        senderId: identity.peerId,
+        recipientId: Packet.broadcastId,
+        data: blob,
+      );
+      for (final fragment in fragments) {
+        await _router.originate(fragment);
+      }
+    }).then((_) => packetId);
+  }
 
   Stream<ReceivedMessage> get messages => _inbox.stream;
 
@@ -156,7 +225,11 @@ class MeshNode {
         await _onReceipt(packet);
       } else if (packet.type == PacketType.noiseHandshake) {
         await _onHandshake(packet);
+      } else if (packet.type == PacketType.channel) {
+        await _onChannel(packet);
       }
+    } on ChannelFormatException {
+      // Wrong channel, tampered, or not ours: dropped. Relaying already happened.
     } on NoiseException {
       // A bad handshake or ciphertext is dropped; the sender can retry.
     }
@@ -258,6 +331,35 @@ class MeshNode {
     if (claimedPeer.hex != key) return;
     _sessions[key] = session;
     await _flush(packet.senderId);
+  }
+
+  Future<void> _onChannel(Packet packet) async {
+    final complete = _reassembler.add(packet);
+    if (complete == null) return;
+    final tag = channelTagOf(complete);
+    if (tag == null) return;
+    final channel = _channels[tag.hex];
+    if (channel == null) return;
+    final opened = await openChannelMessage(
+      channel,
+      complete,
+      senderId: packet.senderId,
+    );
+    final key = '${channel.tagHex}:${packet.senderId.hex}';
+    var window = _channelReplay.remove(key);
+    if (window == null && _channelReplay.length >= maxChannelSenders) {
+      _channelReplay.remove(_channelReplay.keys.first);
+    }
+    window ??= ReplayWindow(size: channelReplayWindow);
+    _channelReplay[key] = window;
+    if (!window.accept(opened.counter)) return;
+    _channelInbox.add(
+      ChannelMessage(
+        channelTag: tag,
+        senderId: packet.senderId,
+        text: opened.text,
+      ),
+    );
   }
 
   Future<void> _onTransport(Packet packet) async {

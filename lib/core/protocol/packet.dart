@@ -15,7 +15,10 @@ enum PacketType {
   announce(0x01),
   noiseHandshake(0x02),
   noiseTransport(0x03),
-  ack(0x04);
+  ack(0x04),
+
+  /// Group message on a unit channel: broadcast, encrypted under the channel key.
+  channel(0x05);
 
   const PacketType(this.code);
 

@@ -34,13 +34,46 @@ class _MessagesPageState extends State<MessagesPage> {
     if (mounted && controller.lastError == null) _message.clear();
   }
 
+  /// Asks for a channel name. Every unit member who joins the same name shares it.
+  Future<void> _joinChannel() async {
+    final field = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Join a channel'),
+        content: TextField(
+          key: const Key('channel-name-field'),
+          controller: field,
+          autofocus: true,
+          maxLength: 24,
+          decoration: const InputDecoration(hintText: 'Channel name'),
+          onSubmitted: (value) => Navigator.of(context).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('channel-join-confirm'),
+            onPressed: () => Navigator.of(context).pop(field.text),
+            child: const Text('Join'),
+          ),
+        ],
+      ),
+    );
+    field.dispose();
+    if (name == null || name.trim().isEmpty) return;
+    await widget.controller.joinChannel(name);
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
-    final contacts = controller.contacts;
+    final conversations = controller.conversations;
     final selected = controller.selectedContact;
 
-    if (contacts.isEmpty) {
+    if (controller.contacts.isEmpty) {
       return _EmptyState(
         icon: Icons.forum_outlined,
         title: 'No contacts yet',
@@ -75,7 +108,7 @@ class _MessagesPageState extends State<MessagesPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             scrollDirection: Axis.horizontal,
             children: [
-              for (final id in contacts)
+              for (final id in conversations)
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
@@ -84,6 +117,13 @@ class _MessagesPageState extends State<MessagesPage> {
                     onSelected: (_) => controller.select(id),
                   ),
                 ),
+              ActionChip(
+                key: const Key('join-channel-button'),
+                avatar: const Icon(Icons.tag, size: 18),
+                label: const Text('Channel'),
+                tooltip: 'Join a channel',
+                onPressed: _joinChannel,
+              ),
             ],
           ),
         ),
@@ -186,6 +226,11 @@ class _Thread extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (message.from != null)
+                    Text(
+                      message.from!,
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
                   Text(message.text),
                   if (outgoing) ...[
                     const SizedBox(height: 4),
