@@ -40,6 +40,8 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.5.0
+  record: 6.2.1
+  flutter_soloud: 3.5.4
 
 dev_dependencies:
   flutter_test:

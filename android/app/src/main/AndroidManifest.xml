@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Scanning unit and identity QR codes during provisioning only. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Push-to-talk: the microphone records only while the talk button is held. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <!-- BLE link (lib/transports/ble_platform_radio.dart). Android 12+ permissions. -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />

@@ -137,6 +137,29 @@ class _MessagesPageState extends State<MessagesPage> {
                 )
               : _Thread(controller: controller, contactId: selected),
         ),
+        if (selected != null &&
+            ChatController.isChannel(selected) &&
+            controller.voiceAvailable)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Listener(
+              onPointerDown: (_) => controller.startTalking(),
+              onPointerUp: (_) => controller.stopTalking(),
+              onPointerCancel: (_) => controller.stopTalking(),
+              child: FilledButton.icon(
+                key: const Key('talk-button'),
+                onPressed: () {},
+                icon: Icon(controller.talking ? Icons.mic : Icons.mic_none),
+                label: Text(
+                  controller.talking
+                      ? 'Talking…'
+                      : controller.speakerOn(selected) != null
+                      ? '${controller.speakerOn(selected)} is talking'
+                      : 'Hold to talk',
+                ),
+              ),
+            ),
+          ),
         if (controller.lastError != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),

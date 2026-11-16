@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import '../core/crypto/identity.dart';
@@ -6,6 +7,7 @@ import '../transports/lan_manager.dart';
 import 'chat_controller.dart';
 import 'identity_store.dart';
 import 'secret_store.dart';
+import 'voice_audio.dart';
 
 /// The app cannot start. [message] is safe to show: it never carries key bytes or paths.
 class StartupFailure implements Exception {
@@ -31,10 +33,14 @@ Future<ChatController> buildController(SecretStore store) async {
     transports: const [],
     random: Random.secure(),
   );
+  // Push-to-talk plugins exist for Android and Windows only.
+  final voice = Platform.isAndroid || Platform.isWindows;
   final controller = ChatController(
     node: node,
     lan: LanManager(node: node),
     store: store,
+    capture: voice ? RecordVoiceCapture() : null,
+    playback: voice ? SoloudVoicePlayback() : null,
   );
   try {
     await controller.start();

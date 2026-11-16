@@ -11,7 +11,9 @@ import '../core/posture.dart';
 import '../core/protocol/packet.dart';
 import '../core/provisioning/unit_roster.dart';
 import '../transports/lan_manager.dart';
+import '../core/voice/voice_burst.dart';
 import 'channel_store.dart';
+import 'voice_audio.dart';
 import 'panic_wipe.dart';
 import 'posture_store.dart';
 import 'secret_store.dart';
@@ -83,8 +85,18 @@ class ChatController extends ChangeNotifier {
     required this.node,
     required this.lan,
     required this.store,
+    this.capture,
+    this.playback,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
+
+  /// Microphone and speaker for push-to-talk; null where voice is not available.
+  final VoiceCapture? capture;
+  final VoicePlayback? playback;
+  VoiceBurstSender? _talkSender;
+  final Map<String, VoiceBurstReceiver> _receivers = {};
+  final Map<String, String> _speakers = {};
+  Timer? _voiceTicker;
 
   final MeshNode node;
   final LanManager lan;
@@ -187,6 +199,12 @@ class ChatController extends ChangeNotifier {
     _subscription = node.messages.listen(handleIncoming);
     _receiptSubscription = node.receipts.listen(handleReceipt);
     _channelSubscription = node.channelMessages.listen(handleChannelMessage);
+    // Releases a speaker whose end frame was lost.
+    _voiceTicker = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      for (final receiver in _receivers.values) {
+        receiver.tick();
+      }
+    });
     node.start();
     _myFingerprint = await fingerprint(node.identity.publicKey);
     // Before any LAN start: a Silent phone must not bind a socket on launch.
@@ -204,6 +222,9 @@ class ChatController extends ChangeNotifier {
   }
 
   Future<void> stop() async {
+    await stopTalking();
+    _voiceTicker?.cancel();
+    _voiceTicker = null;
     await _subscription?.cancel();
     await _receiptSubscription?.cancel();
     await _channelSubscription?.cancel();
@@ -407,6 +428,7 @@ class ChatController extends ChangeNotifier {
   /// transmission on; the new posture is then saved, and a failed save is reported.
   Future<void> setPosture(Posture next) async {
     posture.change(next);
+    if (next != Posture.normal) await stopTalking();
     if (next == Posture.silent) {
       await lan.stop();
       _listenPort = null;
@@ -432,6 +454,8 @@ class ChatController extends ChangeNotifier {
   /// controller: this node's identity is wiped and must not be used again.
   Future<bool> panicWipe() async {
     // Keys go first. A transport that fails to stop must not stop the deletes.
+    _talkSender = null;
+    unawaited(capture?.stop());
     var deleted = true;
     try {
       await wipeStoredSecrets(store);
@@ -500,15 +524,102 @@ class ChatController extends ChangeNotifier {
         .firstOrNull;
     final sender = message.senderId.hex;
     if (entry == null || !contacts.contains(sender)) return;
-    _append(
-      '#${entry.key}',
-      ChatMessage(
-        outgoing: false,
-        text: utf8.decode(message.text, allowMalformed: true),
-        at: _clock(),
-        from: nameOf(sender),
-      ),
-    );
+    final body = message.text;
+    if (body.isEmpty) return;
+    final channelId = '#${entry.key}';
+    switch (body[0]) {
+      case _kindText:
+        _append(
+          channelId,
+          ChatMessage(
+            outgoing: false,
+            text: utf8.decode(body.sublist(1), allowMalformed: true),
+            at: _clock(),
+            from: nameOf(sender),
+          ),
+        );
+      case _kindVoice:
+        _receiverFor(channelId).accept(sender, Uint8List.sublistView(body, 1));
+    }
+  }
+
+  // Inner message kinds on a channel: the first plaintext byte.
+  static const int _kindText = 0x00;
+  static const int _kindVoice = 0x01;
+
+  VoiceBurstReceiver _receiverFor(String channelId) => _receivers.putIfAbsent(
+    channelId,
+    () => VoiceBurstReceiver(
+      clock: _clock,
+      onPcm: (pcm) => playback?.push(pcm),
+      onSpeaker: (speaker) {
+        if (speaker == null) {
+          _speakers.remove(channelId);
+          unawaited(playback?.end());
+        } else {
+          _speakers[channelId] = nameOf(speaker);
+          unawaited(playback?.begin());
+        }
+        notifyListeners();
+      },
+    ),
+  );
+
+  /// Who is talking on [channelId] right now, by name; null when nobody is.
+  String? speakerOn(String channelId) => _speakers[channelId];
+
+  /// True while this phone holds the talk button and is sending.
+  bool get talking => _talkSender?.active ?? false;
+
+  /// Push-to-talk needs a microphone and speaker on this platform.
+  bool get voiceAvailable => capture != null && playback != null;
+
+  /// Starts a voice burst on the selected channel. Silent and Quiet refuse it, and a
+  /// burst stops itself after 30 seconds.
+  Future<void> startTalking() async {
+    final channelId = _selected;
+    final input = capture;
+    if (channelId == null || !isChannel(channelId)) {
+      return reportError('Choose a channel to talk on');
+    }
+    if (input == null) return reportError('Voice is not available here');
+    if (posture.current == Posture.silent) {
+      return reportError('Silent: talk is off');
+    }
+    if (posture.current == Posture.quiet) {
+      return reportError('Quiet: voice is off; text is held until you send');
+    }
+    final key = _channelKeys[channelId.substring(1)];
+    if (key == null || talking) return;
+    if (_speakers[channelId] != null) {
+      return reportError('${_speakers[channelId]} is talking');
+    }
+    final sender = VoiceBurstSender(
+      send: (frame) => node
+          .sendChannel(key, Uint8List.fromList([_kindVoice, ...frame]))
+          .then((_) {}),
+      onCapped: () {
+        unawaited(input.stop());
+        reportError('Burst limit reached (30 s)');
+      },
+    )..start();
+    _talkSender = sender;
+    if (!await input.start((pcm) => unawaited(sender.addPcm(pcm)))) {
+      _talkSender = null;
+      return reportError('Microphone permission is needed to talk');
+    }
+    _lastError = null;
+    notifyListeners();
+  }
+
+  /// Ends the burst; the remaining audio goes out as the end frame.
+  Future<void> stopTalking() async {
+    final sender = _talkSender;
+    if (sender == null) return;
+    _talkSender = null;
+    await capture?.stop();
+    await sender.stop();
+    notifyListeners();
   }
 
   /// Sends to a member (PeerID hex) or a channel ('#name').
@@ -518,7 +629,7 @@ class ChatController extends ChangeNotifier {
     }
     final key = _channelKeys[conversationId.substring(1)];
     if (key == null) throw StateError('Join $conversationId before sending');
-    return node.sendChannel(key, bytes);
+    return node.sendChannel(key, Uint8List.fromList([_kindText, ...bytes]));
   }
 
   /// Channel keys depend on the unit secret: derive them again for the current unit.
