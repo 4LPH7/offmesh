@@ -46,9 +46,9 @@ wired into the running app.
 ## Phase 6: Channels and push-to-talk
 - [x] **REQ-29**: Channel key derived from the unit secret and channel name (HKDF); a sealed broadcast packet type that only channel members can open.
 - [x] **REQ-30**: Group text on a channel, delivered once per member, with a per-sender replay window.
-- [ ] **REQ-31**: Push-to-talk voice bursts: hold to record and send in frames, release to end; capped length; under one second delay on LAN.
-- [ ] **REQ-32**: One speaker played at a time per channel; a second speaker is shown as busy.
-- [ ] **REQ-33**: Posture gates: Silent blocks talk and channel sends; Quiet holds text and refuses voice.
+- [x] **REQ-31**: Push-to-talk voice bursts: hold to record and send in frames, release to end; capped length; under one second delay on LAN.
+- [x] **REQ-32**: One speaker played at a time per channel; a second speaker is shown as busy.
+- [x] **REQ-33**: Posture gates: Silent blocks talk and channel sends; Quiet holds text and refuses voice.
 
 ## Phase 7: Internet mode
 - [ ] **REQ-34**: Relay server that forwards sealed frames between connections with the same rendezvous ID; stores nothing; no accounts.
@@ -83,7 +83,7 @@ wired into the running app.
 | REQ-24, REQ-25 | 4 | 04-01 | Implemented and automated-tested; device checks NOT RUN |
 | REQ-26 to REQ-28 | 5 | 05-01 | Built and tested as primitives; no app contact flow |
 | REQ-29, REQ-30 | 6 | 06-01 | Built and tested in simulation; device check NOT RUN |
-| REQ-31 to REQ-33 | 6 | 06-02, 06-03 | Not started (REQ-33 Silent/Quiet already apply to channel text) |
+| REQ-31 to REQ-33 | 6 | 06-02 | Built and tested with fakes; delay under 1 s NOT measured (no device run) |
 | REQ-34 to REQ-37 | 7 | 07-01 to 07-03 | Not started |
 | REQ-38 to REQ-40 | 8 | 08-01, 08-02 | Not started |
 
