@@ -9,11 +9,14 @@ import '../core/crypto/unit_keys.dart';
 import '../core/mesh/mesh_node.dart';
 import '../core/posture.dart';
 import '../core/protocol/packet.dart';
+import '../core/protocol/sealed_envelope.dart';
 import '../core/provisioning/unit_roster.dart';
 import '../transports/lan_manager.dart';
+import '../transports/relay_transport.dart';
 import '../core/voice/tones.dart';
 import '../core/voice/voice_burst.dart';
 import 'channel_store.dart';
+import 'internet_store.dart';
 import 'voice_audio.dart';
 import 'panic_wipe.dart';
 import 'posture_store.dart';
@@ -98,6 +101,113 @@ class ChatController extends ChangeNotifier {
   final Map<String, VoiceBurstReceiver> _receivers = {};
   final Map<String, String> _speakers = {};
   final Map<String, DateTime> _lastHeard = {};
+
+  // Internet mode: off at every launch, on only when the user switches it on.
+  RelayTransport? _relay;
+  RelayAddress? _relayAddress;
+  bool _internetAcked = false;
+  RelayState _internetState = RelayState.stopped;
+
+  /// The relay as 'host:port', or null until one is set.
+  String? get relayAddress => _relayAddress?.toString();
+
+  /// True while internet mode is switched on (it may still be connecting).
+  bool get internetOn => _relay != null;
+
+  RelayState get internetState => _internetState;
+
+  /// False until the user has read the internet-mode warning once.
+  bool get internetAcked => _internetAcked;
+
+  /// Saves the relay address. A running connection moves to the new relay.
+  Future<bool> setRelayAddress(String text) async {
+    final RelayAddress address;
+    try {
+      address = RelayAddress.parse(text);
+    } on FormatException catch (e) {
+      _lastError = e.message;
+      notifyListeners();
+      return false;
+    }
+    try {
+      await InternetStore.saveAddress(store, address);
+    } catch (_) {
+      _lastError = 'Could not save the relay address';
+      notifyListeners();
+      return false;
+    }
+    _relayAddress = address;
+    _lastError = null;
+    if (internetOn) await _startInternet();
+    notifyListeners();
+    return true;
+  }
+
+  /// Records that the warning was read, so it is not shown again.
+  Future<void> acknowledgeInternet() async {
+    _internetAcked = true;
+    try {
+      await InternetStore.saveAck(store);
+    } catch (_) {
+      // Shown again next launch; nothing else depends on it.
+    }
+    notifyListeners();
+  }
+
+  /// Switches internet mode on or off. On needs a unit, a relay address and the Normal
+  /// posture: Silent and Quiet keep every link that leaves the local network closed.
+  Future<void> setInternet(bool on) async {
+    if (!on) {
+      await _stopInternet();
+      _lastError = null;
+      notifyListeners();
+      return;
+    }
+    if (_unit == null) {
+      return reportError('Join a unit first');
+    }
+    if (_relayAddress == null) {
+      return reportError('Set a relay address first');
+    }
+    if (posture.current != Posture.normal) {
+      return reportError('Set the posture to Normal to use the internet');
+    }
+    await _startInternet();
+    _lastError = null;
+    notifyListeners();
+  }
+
+  /// (Re)connects to the relay with the current unit and address.
+  Future<void> _startInternet() async {
+    final unit = _unit;
+    final address = _relayAddress;
+    await _stopInternet();
+    if (unit == null || address == null) return;
+    final keys = await UnitKeys.derive(unit.unitSecret);
+    final relay = RelayTransport(
+      host: address.host,
+      port: address.port,
+      envelope: SealedEnvelope(keys.sealKey),
+      unitSecret: unit.unitSecret,
+      onState: (state) {
+        _internetState = state;
+        notifyListeners();
+      },
+    );
+    _relay = relay;
+    node.addTransport(relay);
+    relay.start();
+  }
+
+  Future<void> _stopInternet() async {
+    final relay = _relay;
+    if (relay == null) return;
+    _relay = null;
+    await node.removeTransport(relay);
+    await relay.stop();
+    _internetState = RelayState.stopped;
+  }
+
   Timer? _voiceTicker;
 
   final MeshNode node;
@@ -211,6 +321,8 @@ class ChatController extends ChangeNotifier {
     _myFingerprint = await fingerprint(node.identity.publicKey);
     // Before any LAN start: a Silent phone must not bind a socket on launch.
     posture.change(await PostureStore.load(store));
+    _relayAddress = await InternetStore.loadAddress(store);
+    _internetAcked = await InternetStore.loadAck(store);
     try {
       final unit = await UnitStore.load(store);
       if (unit != null) {
@@ -224,6 +336,7 @@ class ChatController extends ChangeNotifier {
   }
 
   Future<void> stop() async {
+    await _stopInternet();
     await stopTalking();
     _voiceTicker?.cancel();
     _voiceTicker = null;
@@ -430,7 +543,10 @@ class ChatController extends ChangeNotifier {
   /// transmission on; the new posture is then saved, and a failed save is reported.
   Future<void> setPosture(Posture next) async {
     posture.change(next);
-    if (next != Posture.normal) await stopTalking();
+    if (next != Posture.normal) {
+      await stopTalking();
+      await _stopInternet();
+    }
     if (next == Posture.silent) {
       await lan.stop();
       _listenPort = null;
@@ -473,6 +589,8 @@ class ChatController extends ChangeNotifier {
     // plaintext in RAM just because a key could not be removed.
     _threads.clear();
     _lastHeard.clear();
+    _relayAddress = null;
+    _internetAcked = false;
     _channelKeys.clear();
     _channelNames = const [];
     _queue.clear();
@@ -720,6 +838,8 @@ class ChatController extends ChangeNotifier {
     ]);
     _unit = roster;
     await _rejoinChannels(roster.unitSecret);
+    // A new unit means a new seal key and rendezvous room: reconnect if online.
+    if (internetOn) await _startInternet();
     if (_selected != null && !conversations.contains(_selected)) {
       _selected = null;
     }

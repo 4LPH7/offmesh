@@ -51,10 +51,10 @@ wired into the running app.
 - [x] **REQ-33**: Posture gates: Silent blocks talk and channel sends; Quiet holds text and refuses voice.
 
 ## Phase 7: Internet mode
-- [ ] **REQ-34**: Relay server that forwards sealed frames between connections with the same rendezvous ID; stores nothing; no accounts.
-- [ ] **REQ-35**: Rendezvous ID derived from the unit secret, rotating daily.
-- [ ] **REQ-36**: `RelayLink implements MeshTransport`, sealed and roster-checked like LAN, with reconnect and backoff.
-- [ ] **REQ-37**: Internet switch: off by default, off in Silent, first-use warning; relay address by typing or QR.
+- [x] **REQ-34**: Relay server that forwards sealed frames between connections with the same rendezvous ID; stores nothing; no accounts.
+- [x] **REQ-35**: Rendezvous ID derived from the unit secret, rotating daily.
+- [x] **REQ-36**: `RelayLink implements MeshTransport`, sealed and roster-checked like LAN, with reconnect and backoff.
+- [x] **REQ-37**: Internet switch: off by default, off in Silent and Quiet, first-use warning; relay address by typing (QR not built).
 
 ## Phase 8: Minimal UI
 - [ ] **REQ-38**: Home is one talk screen: name, one-line status, large talk button, text field.
@@ -84,7 +84,7 @@ wired into the running app.
 | REQ-26 to REQ-28 | 5 | 05-01 | Built and tested as primitives; no app contact flow |
 | REQ-29, REQ-30 | 6 | 06-01 | Built and tested in simulation; device check NOT RUN |
 | REQ-31 to REQ-33 | 6 | 06-02 | Built and tested with fakes; delay under 1 s NOT measured (no device run) |
-| REQ-34 to REQ-37 | 7 | 07-01 to 07-03 | Not started |
+| REQ-34 to REQ-37 | 7 | 07-01 to 07-03 | Built and tested over loopback; real-internet device test NOT RUN; relay address QR not built |
 | REQ-38 to REQ-40 | 8 | 08-01, 08-02 | Not started |
 
 ## Status notes (2026-11-15)

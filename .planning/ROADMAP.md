@@ -19,7 +19,7 @@ Windows PC. Requirement IDs match `REQUIREMENTS.md`, which is the single source.
 - [ ] **Phase 4: Operator controls** - Radio posture switch, panic wipe, Relay Mode screen.
 - [ ] **Phase 5: Store-and-forward** - Messages for an offline recipient are carried by other phones.
 - [x] **Phase 6: Channels and push-to-talk** - Unit channels for group text and hold-to-talk voice bursts over LAN.
-- [ ] **Phase 7: Internet mode** - Members reach each other over the internet through a relay that sees only sealed frames, or by direct IP.
+- [x] **Phase 7: Internet mode** - Members reach each other over the internet through a relay that sees only sealed frames, or by direct IP.
 - [ ] **Phase 8: Minimal UI** - One talk screen with a large push-to-talk button; everything else one tap away.
 
 ## Phase Details
@@ -155,9 +155,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 07-01: Relay server (single Dart file, WebSocket or TCP), rendezvous ID derivation, rate limits, run instructions.
-- [ ] 07-02: `RelayLink implements MeshTransport` over the existing sealed link; reconnect with backoff.
-- [ ] 07-03: Internet switch, relay address entry and QR, first-use warning, posture gates.
+- [x] 07-01: Relay server (`lib/relay/relay_server.dart`, TCP, `dart run bin/relay.dart`), daily rendezvous ID, per-room and rate limits. Details: `phases/07-internet/07-PLAN.md`.
+- [x] 07-02: `RelayTransport implements MeshTransport` (frames sealed under the unit key; reconnect with backoff; rejoins the new room after midnight UTC).
+- [x] 07-03: Internet card in Controls: relay address (typed; QR not built), switch off at every launch, first-use warning, Silent and Quiet switch it off. Device check NOT RUN.
 
 ### Phase 8: Minimal UI
 **Goal**: A new user talks within one minute, with one hand.
@@ -219,5 +219,5 @@ Cut or parked so they stop reappearing. Each needs a stated reason to return.
 | 4. Operator controls | 1/1 | Software built; BLE posture and device checks open | - |
 | 5. Store-and-forward | 1/1 | Primitives built; app integration and device test open | - |
 | 6. Channels and push-to-talk | 4/4 | Built; device runs NOT RUN | - |
-| 7. Internet mode | 0/3 | Not started | - |
+| 7. Internet mode | 3/3 | Built and tested over loopback; real-internet device test NOT RUN | - |
 | 8. Minimal UI | 0/2 | Not started | - |

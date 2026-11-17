@@ -38,6 +38,23 @@ Works today over Wi-Fi or a phone hotspot:
 
 The reverse-path table now routes established encrypted messages over a learned first hop; handshakes without a route and receipts still flood. The router floods if the route is unknown or its send fails.
 
+## Internet mode and the relay
+
+Off by default. For members who are not on the same network:
+
+1. On a machine both can reach (a small server, or a PC with a forwarded port), run
+   `dart run bin/relay.dart --port 7777`. It forwards sealed frames and stores nothing.
+2. On each phone: Controls, Internet mode, enter the relay as `host:7777`, Save, switch on.
+   A warning appears the first time.
+
+The relay cannot read messages, headers or names. It does see each phone's IP address,
+when it is online, and message sizes. Silent and Quiet switch internet mode off. Both
+phones need clocks within a few minutes (frames older than 10 minutes are refused), and
+phones on either side of midnight UTC meet in different rooms until both pass it.
+
+Channels and push-to-talk work over the relay like over Wi-Fi. Not tested on a real
+mobile connection.
+
 ## Prototypes not connected to chat
 
 - **Bluetooth:** the BLE codec, link, and Android radio are built and fake-tested; app discovery/peer management and posture gating are not wired. The two-phone spike is NOT RUN.

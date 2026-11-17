@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../app/chat_controller.dart';
 import '../core/posture.dart';
+import 'internet_card.dart';
 import 'relay_screen.dart';
 
 class ControlsPage extends StatelessWidget {
@@ -106,6 +107,8 @@ class ControlsPage extends StatelessWidget {
             ),
           ),
         ],
+        const SizedBox(height: 8),
+        InternetCard(controller: controller),
         const SizedBox(height: 8),
         Card(
           child: Column(
