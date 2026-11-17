@@ -17,7 +17,7 @@ See: .planning/PROJECT.md (updated 2026-11-14)
 See: docs/mission_plan.md (threat model, limits, design decisions)
 
 **Core value:** Offline, end-to-end encrypted phone-to-phone messaging for a pre-provisioned unit, with sealed frames and operator-controlled emissions.
-**Current focus:** Phases 1-7 are built in software; device acceptance tests are NOT RUN. Next: Phase 8 (minimal one-screen UI). To try internet mode: run `dart run bin/relay.dart` on a reachable machine, then set its address in Controls.
+**Current focus:** Phases 1-8 are built in software; device acceptance tests are NOT RUN. Next: device runs (Phase 2 LAN, BLE spike, relay over mobile data, TalkBack pass on the talk screen). To try internet mode: run `dart run bin/relay.dart` on a reachable machine, then set its address in menu, Radio and internet.
 
 ## Current Position
 

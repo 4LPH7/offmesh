@@ -50,14 +50,19 @@ void main() {
       findsOneWidget,
     );
     expect(controller.listenPort, isNull);
-    final create = find.byKey(const Key('create-unit-button'));
-    expect(tester.widget<FilledButton>(create).onPressed, isNull);
+    expect(find.text('Set up OffMesh · step 1 of 3'), findsOneWidget);
+    final next = find.byKey(const Key('name-next-button'));
+    expect(tester.widget<FilledButton>(next).onPressed, isNull);
 
     await tester.enterText(find.byKey(const Key('my-name-field')), 'Alpha');
     await tester.pump();
+    expect(tester.widget<FilledButton>(next).onPressed, isNotNull);
+    await tester.tap(next);
+    await tester.pump();
 
+    expect(find.text('Set up OffMesh · step 2 of 3'), findsOneWidget);
     expect(find.text(controller.identityCodeFor('Alpha')!), findsOneWidget);
-    expect(tester.widget<FilledButton>(create).onPressed, isNotNull);
+    expect(find.byKey(const Key('create-unit-button')), findsOneWidget);
   });
 
   testWidgets('a unit code without this phone shows a clear refusal', (
@@ -69,6 +74,10 @@ void main() {
       UnitMember(stranger.publicKey, 'Alpha'),
     ]).toText();
     await tester.pumpWidget(OffMeshApp(controller: controller));
+    await tester.enterText(find.byKey(const Key('my-name-field')), 'Bravo');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('name-next-button')));
+    await tester.pump();
 
     await tester.enterText(find.byKey(const Key('unit-code-field')), code);
     await tester.tap(find.byKey(const Key('join-unit-button')));
@@ -83,6 +92,8 @@ void main() {
     await tester.pumpWidget(OffMeshApp(controller: controller));
     await tester.enterText(find.byKey(const Key('my-name-field')), 'Alpha');
     await tester.pump();
+    await tester.tap(find.byKey(const Key('name-next-button')));
+    await tester.pump();
 
     await tester.runAsync(() async {
       await tester.tap(find.byKey(const Key('create-unit-button')));
@@ -94,8 +105,10 @@ void main() {
 
     expect(controller.provisioned, isTrue);
     expect(find.byType(HomePage), findsOneWidget);
-    await tester.tap(find.byKey(const Key('home-tab-unit')));
-    await tester.pump();
+    await tester.tap(find.byKey(const Key('menu-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('menu-unit')));
+    await tester.pumpAndSettle();
     expect(find.text('Alpha (this device)'), findsOneWidget);
   });
 }

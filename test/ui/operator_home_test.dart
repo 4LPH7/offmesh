@@ -43,6 +43,14 @@ Future<ChatController> _setUp(WidgetTester tester) async {
   return controller;
 }
 
+/// Opens Radio and internet from the talk screen: the menu, then the item.
+Future<void> _openControls(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('menu-button')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('menu-controls')));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('quiet shows the send-burst button and the posture is saved', (
     tester,
@@ -51,8 +59,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: HomePage(controller: controller)),
     );
-    await tester.tap(find.byKey(const Key('home-tab-controls')));
-    await tester.pump();
+    await _openControls(tester);
     expect(find.byKey(const Key('send-burst-button')), findsNothing);
 
     await tester.runAsync(() => controller.setPosture(Posture.quiet));
@@ -67,8 +74,9 @@ void main() {
     await tester.pump();
 
     expect(find.text('1 message held'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('home-tab-messages')));
-    await tester.pump();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('Status: No one in range · Quiet'), findsOne);
     expect(
       find.byWidgetPredicate((w) => w is Icon && w.semanticLabel == 'Held'),
       findsOneWidget,
@@ -88,8 +96,7 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.byKey(const Key('home-tab-controls')));
-    await tester.pump();
+    await _openControls(tester);
 
     await tester.ensureVisible(find.byKey(const Key('panic-wipe-button')));
     await tester.tap(find.byKey(const Key('panic-wipe-button')));

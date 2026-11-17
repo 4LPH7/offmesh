@@ -4,8 +4,9 @@ Offline, end-to-end encrypted messaging between stock Android phones. No interne
 server, or extra radio hardware. Built in Flutter. A Windows desktop build exists as a
 LAN test peer.
 
-This is a prototype. Read "Limits" before relying on it. The app keeps messages,
-unit setup, and radio controls on separate tabs so the main chat stays focused.
+This is a prototype. Read "Limits" before relying on it. The app is one talk screen:
+the channel or contact name (tap it to switch), a status line, a large hold-to-talk
+button and a text field. Unit setup and radio controls are in the menu.
 Relay Mode is Android-only; Bluetooth and store-and-forward are not connected to chat yet.
 
 ## Implemented
@@ -44,7 +45,7 @@ Off by default. For members who are not on the same network:
 
 1. On a machine both can reach (a small server, or a PC with a forwarded port), run
    `dart run bin/relay.dart --port 7777`. It forwards sealed frames and stores nothing.
-2. On each phone: Controls, Internet mode, enter the relay as `host:7777`, Save, switch on.
+2. On each phone: menu, Radio and internet, Internet mode, enter the relay as `host:7777`, Save, switch on.
    A warning appears the first time.
 
 The relay cannot read messages, headers or names. It does see each phone's IP address,
@@ -93,7 +94,7 @@ Phase 1 is complete in simulation. Phase 2 software is built; its phone/PC captu
 4. Phase 5 app integration and store-and-forward device acceptance.
 5. Phase 6: channels and push-to-talk voice bursts (walkie-talkie use).
 6. Phase 7: internet mode through a relay that sees only sealed frames, or by direct IP.
-7. Phase 8: one-screen minimal UI with a large talk button.
+7. Phase 8 (built): one-screen minimal UI with a large talk button.
 
 Not planned: full-duplex voice calls, Wi-Fi Direct, mDNS, iOS, external radios.
 
@@ -112,12 +113,12 @@ The APK is written to `build/app/outputs/flutter-apk/app-debug.apk`.
 ## Two-phone test
 
 1. Phone A turns on a Wi-Fi hotspot. Phone B joins it.
-2. On A, create a unit. Open the Unit tab, add B's identity code and share the unit
-   code. On B, scan or paste A's unit code to join.
-3. In the Unit tab on both phones, compare fingerprints and note "Listening on port N".
-4. Beacons usually link the phones within a few seconds. If not, on B open Unit, expand
-   "Connect by address", enter A's IP and port, then connect.
-5. Open Messages, select the other phone and send a message. It shows two ticks when the
+2. On A, enter a name and create a unit. Open menu, Unit and members, add B's identity
+   code and share the unit code. On B, enter a name, then scan or paste A's unit code.
+3. In Unit and members on both phones, compare fingerprints and note "Listening on port N".
+4. Beacons usually link the phones within a few seconds (the status line shows
+   "1 linked"). If not, on B expand "Connect by address", enter A's IP and port, connect.
+5. Tap the name at the top, pick the other phone and send a message. It shows two ticks when the
    recipient's receipt arrives.
 6. Turn off mobile data to confirm nothing leaves the local network.
 

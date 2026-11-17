@@ -57,9 +57,9 @@ wired into the running app.
 - [x] **REQ-37**: Internet switch: off by default, off in Silent and Quiet, first-use warning; relay address by typing (QR not built).
 
 ## Phase 8: Minimal UI
-- [ ] **REQ-38**: Home is one talk screen: name, one-line status, large talk button, text field.
-- [ ] **REQ-39**: Everything else at most two taps from home; first run in three steps.
-- [ ] **REQ-40**: Accessibility: 48 dp targets, system font scaling, screen-reader labels on every control.
+- [x] **REQ-38**: Home is one talk screen: name, one-line status, large talk button, text field.
+- [x] **REQ-39**: Everything else at most two taps from home; first run in three steps.
+- [x] **REQ-40**: Accessibility: 48 dp targets, system font scaling, screen-reader labels on every control.
 
 ## Traceability
 
@@ -85,7 +85,7 @@ wired into the running app.
 | REQ-29, REQ-30 | 6 | 06-01 | Built and tested in simulation; device check NOT RUN |
 | REQ-31 to REQ-33 | 6 | 06-02 | Built and tested with fakes; delay under 1 s NOT measured (no device run) |
 | REQ-34 to REQ-37 | 7 | 07-01 to 07-03 | Built and tested over loopback; real-internet device test NOT RUN; relay address QR not built |
-| REQ-38 to REQ-40 | 8 | 08-01, 08-02 | Not started |
+| REQ-38 to REQ-40 | 8 | 08-01, 08-02 | Built and widget-tested (tap-target and label guidelines, 2x text at 320 dp); screen-reader check on a phone NOT RUN |
 
 ## Status notes (2026-11-15)
 - Verified in this run: `flutter test` (353 passed), `flutter analyze` (clean), format check (clean), and `flutter build apk --debug` (success).

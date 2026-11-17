@@ -1,6 +1,62 @@
 import 'package:flutter/material.dart';
 
 import '../app/chat_controller.dart';
+import '../core/posture.dart';
+import '../transports/relay_transport.dart';
+
+/// Asks for a channel name. Every unit member who joins the same name shares it.
+Future<void> joinChannelDialog(
+  BuildContext context,
+  ChatController controller,
+) async {
+  final field = TextEditingController();
+  final name = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Join a channel'),
+      content: TextField(
+        key: const Key('channel-name-field'),
+        controller: field,
+        autofocus: true,
+        maxLength: 24,
+        decoration: const InputDecoration(hintText: 'Channel name'),
+        onSubmitted: (value) => Navigator.of(context).pop(value),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('channel-join-confirm'),
+          onPressed: () => Navigator.of(context).pop(field.text),
+          child: const Text('Join'),
+        ),
+      ],
+    ),
+  );
+  field.dispose();
+  if (name == null || name.trim().isEmpty) return;
+  await controller.joinChannel(name);
+}
+
+/// One line saying whether anyone can hear this phone, with a colour dot.
+(String, Color) statusOf(ChatController c, ColorScheme colors) {
+  const amber = Color(0xFFB26A00);
+  const green = Color(0xFF1E7D45);
+  final posture = c.posture.current;
+  if (posture == Posture.silent) return ('Silent: radios off', colors.error);
+  if (c.talking) return ('Talking', colors.error);
+  final selected = c.selectedContact;
+  final speaker = selected == null ? null : c.speakerOn(selected);
+  if (speaker != null) return ('$speaker is talking', colors.tertiary);
+  final links = c.linkedNeighbours.length;
+  final internet = c.internetState == RelayState.connected;
+  final quiet = posture == Posture.quiet ? ' · Quiet' : '';
+  if (links == 0 && !internet) return ('No one in range$quiet', amber);
+  final parts = [if (links > 0) '$links linked', if (internet) 'internet'];
+  return ('${parts.join(' · ')}$quiet', green);
+}
 
 class MessagesPage extends StatefulWidget {
   const MessagesPage({
@@ -34,132 +90,46 @@ class _MessagesPageState extends State<MessagesPage> {
     if (mounted && controller.lastError == null) _message.clear();
   }
 
-  /// Asks for a channel name. Every unit member who joins the same name shares it.
-  Future<void> _joinChannel() async {
-    final field = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Join a channel'),
-        content: TextField(
-          key: const Key('channel-name-field'),
-          controller: field,
-          autofocus: true,
-          maxLength: 24,
-          decoration: const InputDecoration(hintText: 'Channel name'),
-          onSubmitted: (value) => Navigator.of(context).pop(value),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            key: const Key('channel-join-confirm'),
-            onPressed: () => Navigator.of(context).pop(field.text),
-            child: const Text('Join'),
-          ),
-        ],
-      ),
-    );
-    field.dispose();
-    if (name == null || name.trim().isEmpty) return;
-    await widget.controller.joinChannel(name);
-  }
-
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
-    final conversations = controller.conversations;
     final selected = controller.selectedContact;
-
-    if (controller.contacts.isEmpty) {
-      return _EmptyState(
-        icon: Icons.forum_outlined,
-        title: 'No contacts yet',
-        message: 'Add a unit member to start an encrypted chat.',
-        action: 'Manage unit',
-        onPressed: widget.onOpenUnit,
-      );
-    }
+    final colors = Theme.of(context).colorScheme;
+    final (status, dot) = statusOf(controller, colors);
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
-          child: Row(
-            children: [
-              Icon(
-                Icons.link,
-                size: 18,
-                color: Theme.of(context).colorScheme.secondary,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${controller.linkedNeighbours.length} direct links',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-        ),
-        SizedBox(
-          height: 54,
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            scrollDirection: Axis.horizontal,
-            children: [
-              for (final id in conversations)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(controller.nameOf(id)),
-                    selected: id == selected,
-                    onSelected: (_) => controller.select(id),
+        Semantics(
+          key: const Key('status-line'),
+          container: true,
+          liveRegion: true,
+          label: 'Status: $status',
+          excludeSemantics: true,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+            child: Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    status,
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ),
-              ActionChip(
-                key: const Key('join-channel-button'),
-                avatar: const Icon(Icons.tag, size: 18),
-                label: const Text('Channel'),
-                tooltip: 'Join a channel',
-                onPressed: _joinChannel,
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-        Expanded(
-          child: selected == null
-              ? const _EmptyState(
-                  icon: Icons.chat_bubble_outline,
-                  title: 'Choose a contact',
-                  message:
-                      'Select a unit member above to open the conversation.',
-                )
-              : _Thread(controller: controller, contactId: selected),
-        ),
+        Expanded(child: _body(controller, selected)),
         if (selected != null &&
             ChatController.isChannel(selected) &&
             controller.voiceAvailable)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Listener(
-              onPointerDown: (_) => controller.startTalking(),
-              onPointerUp: (_) => controller.stopTalking(),
-              onPointerCancel: (_) => controller.stopTalking(),
-              child: FilledButton.icon(
-                key: const Key('talk-button'),
-                onPressed: () {},
-                icon: Icon(controller.talking ? Icons.mic : Icons.mic_none),
-                label: Text(
-                  controller.talking
-                      ? 'Talking…'
-                      : controller.speakerOn(selected) != null
-                      ? '${controller.speakerOn(selected)} is talking'
-                      : 'Hold to talk',
-                ),
-              ),
-            ),
-          ),
+          _TalkButton(controller: controller, channel: selected),
         if (controller.lastError != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
@@ -194,6 +164,83 @@ class _MessagesPageState extends State<MessagesPage> {
       ],
     );
   }
+
+  Widget _body(ChatController controller, String? selected) {
+    if (controller.conversations.isEmpty) {
+      return _EmptyState(
+        icon: Icons.forum_outlined,
+        title: 'No one to talk to yet',
+        message: 'Add a unit member, or join a channel from the name above.',
+        action: 'Add a member',
+        onPressed: widget.onOpenUnit,
+      );
+    }
+    if (selected == null) {
+      return const _EmptyState(
+        icon: Icons.chat_bubble_outline,
+        title: 'Choose who to talk to',
+        message: 'Tap "Choose" above to pick a channel or a member.',
+      );
+    }
+    return _Thread(controller: controller, contactId: selected);
+  }
+}
+
+/// Large round hold-to-talk button. Holding records; releasing sends the end of burst.
+class _TalkButton extends StatelessWidget {
+  const _TalkButton({required this.controller, required this.channel});
+
+  final ChatController controller;
+  final String channel;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final talking = controller.talking;
+    final speaker = controller.speakerOn(channel);
+    final label = talking
+        ? 'Talking…'
+        : speaker != null
+        ? '$speaker is talking'
+        : 'Hold to talk';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(
+            button: true,
+            label: talking
+                ? 'Talking. Release to stop.'
+                : 'Hold to talk on ${controller.nameOf(channel)}',
+            excludeSemantics: true,
+            child: Listener(
+              onPointerDown: (_) => controller.startTalking(),
+              onPointerUp: (_) => controller.stopTalking(),
+              onPointerCancel: (_) => controller.stopTalking(),
+              child: SizedBox.square(
+                dimension: 160,
+                child: FilledButton(
+                  key: const Key('talk-button'),
+                  onPressed: () {},
+                  style: FilledButton.styleFrom(
+                    shape: const CircleBorder(),
+                    backgroundColor: talking ? colors.error : colors.primary,
+                    foregroundColor: talking
+                        ? colors.onError
+                        : colors.onPrimary,
+                  ),
+                  child: Icon(talking ? Icons.mic : Icons.mic_none, size: 56),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(label, style: Theme.of(context).textTheme.titleMedium),
+        ],
+      ),
+    );
+  }
 }
 
 class _Thread extends StatelessWidget {
@@ -207,10 +254,15 @@ class _Thread extends StatelessWidget {
     final messages = controller.thread(contactId);
     if (messages.isEmpty) {
       return Center(
-        child: Text(
-          'Messages with ${controller.nameOf(contactId)} will appear here.',
-          style: Theme.of(context).textTheme.bodyMedium,
-          textAlign: TextAlign.center,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            ChatController.isChannel(contactId)
+                ? 'Nothing said on ${controller.nameOf(contactId)} yet.'
+                : 'Messages with ${controller.nameOf(contactId)} will appear here.',
+            style: Theme.of(context).textTheme.bodyMedium,
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
@@ -298,7 +350,7 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -327,14 +379,17 @@ class _ErrorText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colors.errorContainer,
-        borderRadius: BorderRadius.circular(10),
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: colors.errorContainer,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(message, style: TextStyle(color: colors.onErrorContainer)),
       ),
-      child: Text(message, style: TextStyle(color: colors.onErrorContainer)),
     );
   }
 }

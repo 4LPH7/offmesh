@@ -20,7 +20,7 @@ Windows PC. Requirement IDs match `REQUIREMENTS.md`, which is the single source.
 - [ ] **Phase 5: Store-and-forward** - Messages for an offline recipient are carried by other phones.
 - [x] **Phase 6: Channels and push-to-talk** - Unit channels for group text and hold-to-talk voice bursts over LAN.
 - [x] **Phase 7: Internet mode** - Members reach each other over the internet through a relay that sees only sealed frames, or by direct IP.
-- [ ] **Phase 8: Minimal UI** - One talk screen with a large push-to-talk button; everything else one tap away.
+- [x] **Phase 8: Minimal UI** - One talk screen with a large push-to-talk button; everything else two taps away (built; phone TalkBack check NOT RUN).
 
 ## Phase Details
 
@@ -173,8 +173,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01: Talk screen and navigation; move port, fingerprint, and connect details to a details page.
-- [ ] 08-02: First-run flow, accessibility pass, empty and error states.
+- [x] 08-01: Talk screen, conversation picker and one menu; port, fingerprint, and connect details live in Unit and members.
+- [x] 08-02: Three-step first run, accessibility pass (tap-target and label guidelines, 2x text), empty and error states.
 
 ## Suggested additions (not scheduled)
 
