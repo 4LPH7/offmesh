@@ -16,6 +16,7 @@ import '../transports/relay_transport.dart';
 import '../core/voice/tones.dart';
 import '../core/voice/voice_burst.dart';
 import 'channel_store.dart';
+import 'custody_courier.dart';
 import 'history_store.dart';
 import 'internet_store.dart';
 import 'voice_audio.dart';
@@ -238,6 +239,49 @@ class ChatController extends ChangeNotifier {
     }
   }
 
+  // Store-and-forward: a 1:1 message with no receipt after [custodyFallbackAfter] is
+  // handed to the courier, which carries it through other members.
+  static const custodyFallbackAfter = Duration(seconds: 15);
+  final Map<int, (String, String, DateTime)> _awaiting = {};
+  Map<String, Uint8List> _memberKeys = const {};
+  Timer? _custodyTicker;
+  bool _custodyBusy = false;
+  late final CustodyCourier courier = CustodyCourier(
+    keyPair: node.identity.keyPair,
+    peerId: node.peerId,
+    send: (peer, frame) => node.sendText(_bytesOf(peer), frame),
+    rosterKeys: () => _memberKeys.values.toList(),
+    keyOf: (peer) => _memberKeys[peer],
+    onMessage: _onCarried,
+    clock: _clock,
+  );
+
+  void _onCarried(String senderHex, String text) {
+    if (!contacts.contains(senderHex)) return;
+    _append(senderHex, ChatMessage(outgoing: false, text: text, at: _clock()));
+  }
+
+  Future<void> _custodyTick() async {
+    if (_custodyBusy || _wiped || posture.current != Posture.normal) return;
+    _custodyBusy = true;
+    try {
+      final now = _clock();
+      final overdue = [
+        for (final entry in _awaiting.entries)
+          if (now.difference(entry.value.$3) >= custodyFallbackAfter) entry,
+      ];
+      for (final entry in overdue) {
+        _awaiting.remove(entry.key);
+        await courier.hold(entry.value.$1, entry.value.$2);
+      }
+      await courier.tick(linkedNeighbours.intersection(contacts.toSet()));
+    } catch (_) {
+      // A failed hand-over is retried on the next offer.
+    } finally {
+      _custodyBusy = false;
+    }
+  }
+
   UnitRoster? _unit;
   List<MemberInfo> _members = const [];
   String _myFingerprint = '';
@@ -339,6 +383,10 @@ class ChatController extends ChangeNotifier {
         receiver.tick();
       }
     });
+    _custodyTicker = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => unawaited(_custodyTick()),
+    );
     node.start();
     _myFingerprint = await fingerprint(node.identity.publicKey);
     // Before any LAN start: a Silent phone must not bind a socket on launch.
@@ -367,6 +415,8 @@ class ChatController extends ChangeNotifier {
     await stopTalking();
     _voiceTicker?.cancel();
     _voiceTicker = null;
+    _custodyTicker?.cancel();
+    _custodyTicker = null;
     await _subscription?.cancel();
     await _receiptSubscription?.cancel();
     await _channelSubscription?.cancel();
@@ -506,6 +556,7 @@ class ChatController extends ChangeNotifier {
         Uint8List.fromList(utf8.encode(text)),
       );
       _lastError = null;
+      if (!isChannel(id)) _awaiting[packetId] = (id, text, _clock());
       _append(
         id,
         ChatMessage(
@@ -543,6 +594,9 @@ class ChatController extends ChangeNotifier {
           item.contactId,
           Uint8List.fromList(utf8.encode(item.message.text)),
         );
+        if (!isChannel(item.contactId)) {
+          _awaiting[packetId] = (item.contactId, item.message.text, _clock());
+        }
         _replace(
           item.contactId,
           item.message,
@@ -625,6 +679,8 @@ class ChatController extends ChangeNotifier {
     _channelKeys.clear();
     _channelNames = const [];
     _queue.clear();
+    _awaiting.clear();
+    courier.clear();
     if (!deleted) {
       // The radios are already off on purpose: nothing arrives until the app restarts.
       _lastError =
@@ -657,6 +713,10 @@ class ChatController extends ChangeNotifier {
     final id = message.senderId.hex;
     if (!contacts.contains(id)) return;
     _heard(id);
+    if (CustodyCourier.isFrame(message.plaintext)) {
+      unawaited(courier.handle(id, message.plaintext));
+      return;
+    }
     _append(
       id,
       ChatMessage(
@@ -811,6 +871,7 @@ class ChatController extends ChangeNotifier {
   }
 
   void handleReceipt(DeliveryReceiptEvent event) {
+    _awaiting.remove(event.receipt.packetId);
     final thread = _threads[event.peerId.hex];
     if (thread == null) return;
     final index = thread.indexWhere(
@@ -856,6 +917,10 @@ class ChatController extends ChangeNotifier {
 
   Future<void> _apply(UnitRoster roster) async {
     final me = node.identity.publicKey;
+    _memberKeys = {
+      for (final m in roster.members)
+        (await peerIdFor(m.publicKey)).hex: m.publicKey,
+    };
     _members = List.unmodifiable([
       for (final m in roster.members)
         MemberInfo(

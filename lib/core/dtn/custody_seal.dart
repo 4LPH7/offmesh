@@ -86,6 +86,17 @@ Future<Uint8List?> openCustody({
   required CustodyEnvelope envelope,
   required SimpleKeyPair recipient,
   required List<Uint8List> rosterPublicKeys,
+}) async => (await openCustodyFrom(
+  envelope: envelope,
+  recipient: recipient,
+  rosterPublicKeys: rosterPublicKeys,
+))?.$2;
+
+/// Like [openCustody], but also returns the roster key that sealed the envelope.
+Future<(Uint8List, Uint8List)?> openCustodyFrom({
+  required CustodyEnvelope envelope,
+  required SimpleKeyPair recipient,
+  required List<Uint8List> rosterPublicKeys,
 }) async {
   final recipientPublic = Uint8List.fromList(
     (await recipient.extractPublicKey()).bytes,
@@ -102,11 +113,14 @@ Future<Uint8List?> openCustody({
   );
   for (final sender in rosterPublicKeys) {
     try {
-      return await NoiseK.open(
-        responderStatic: recipient,
-        initiatorStaticPublic: sender,
-        prologue: prologue,
-        message: envelope.ciphertext,
+      return (
+        sender,
+        await NoiseK.open(
+          responderStatic: recipient,
+          initiatorStaticPublic: sender,
+          prologue: prologue,
+          message: envelope.ciphertext,
+        ),
       );
     } on NoiseException {
       continue;

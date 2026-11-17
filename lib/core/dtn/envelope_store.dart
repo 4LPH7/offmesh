@@ -120,6 +120,9 @@ class EnvelopeStore {
 
   bool wasDelivered(List<int> id) => _delivered.containsKey(custodyIdKey(id));
 
+  /// The held envelope with [id], or null. Read-only: the copy budget is unchanged.
+  CustodyEnvelope? lookup(List<int> id) => _held[custodyIdKey(id)];
+
   /// Drops every envelope and delivered ID. Intended for panic wipe.
   void clear() {
     _held.clear();
