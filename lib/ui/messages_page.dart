@@ -53,7 +53,10 @@ Future<void> joinChannelDialog(
   final links = c.linkedNeighbours.length;
   final internet = c.internetState == RelayState.connected;
   final quiet = posture == Posture.quiet ? ' · Quiet' : '';
-  if (links == 0 && !internet) return ('No one in range$quiet', amber);
+  final bleOff = c.bleStatus != null ? ' · Bluetooth off' : '';
+  if (links == 0 && !internet) {
+    return ('No one in range$quiet$bleOff', amber);
+  }
   final parts = [if (links > 0) '$links linked', if (internet) 'internet'];
   return ('${parts.join(' · ')}$quiet', green);
 }

@@ -34,7 +34,7 @@ wired into the running app.
 - [ ] **REQ-22**: BLE advertisements carry a rotating ID and no static identifier; implementation is not app-wired or device-verified.
 
 ## Phase 4: Operator controls
-- [ ] **REQ-23**: Radio posture switch with per-transport definitions: Silent, Quiet, Normal; LAN is gated, BLE is not app-wired.
+- [x] **REQ-23**: Radio posture switch with per-transport definitions: Silent, Quiet, Normal; LAN and BLE are gated (BLE tested with a fake radio).
 - [x] **REQ-24**: Panic wipe as key deletion from the keystore plus memory clear.
 - [x] **REQ-25**: Relay Mode screen: black display, counters, foreground service on.
 
@@ -77,11 +77,11 @@ wired into the running app.
 | REQ-15, REQ-16 | 2 | 02-03 | Implemented and automated-tested; capture check NOT RUN |
 | REQ-18 | 2 | 02-04 | Implemented and automated-tested; device check NOT RUN |
 | REQ-19 | 3 | 03-01 | Built and fake-tested; real radio NOT RUN |
-| REQ-20, REQ-22 | 3 | 03-00, 03-01 | Radio code exists; app wiring and hardware verification incomplete |
+| REQ-20, REQ-22 | 3 | 03-00, 03-01 | App-wired (BleManager: rotating-ID advertising, scan, dial, inbound, permissions); fake-radio tested; two-phone hardware run NOT RUN |
 | REQ-21 | 3 | 04-01 | Foreground service builds; screen-off behavior NOT RUN |
-| REQ-23 | 4 | 04-01 | LAN posture gates tested; BLE gate missing |
+| REQ-23 | 4 | 04-01 | LAN and BLE posture gates tested; device check NOT RUN |
 | REQ-24, REQ-25 | 4 | 04-01 | Implemented and automated-tested; device checks NOT RUN |
-| REQ-26 to REQ-28 | 5 | 05-01 | Built and tested as primitives; no app contact flow |
+| REQ-26 to REQ-28 | 5 | 05-01 | App-wired (CustodyCourier: 15 s fallback, ID-list exchange, push to recipient or carrier); three-phone fake test passes; device run NOT RUN |
 | REQ-29, REQ-30 | 6 | 06-01 | Built and tested in simulation; device check NOT RUN |
 | REQ-31 to REQ-33 | 6 | 06-02 | Built and tested with fakes; delay under 1 s NOT measured (no device run) |
 | REQ-34 to REQ-37 | 7 | 07-01 to 07-03 | Built and tested over loopback; real-internet device test NOT RUN; relay address QR not built |

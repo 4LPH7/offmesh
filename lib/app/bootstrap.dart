@@ -3,7 +3,10 @@ import 'dart:math';
 
 import '../core/crypto/identity.dart';
 import '../core/mesh/mesh_node.dart';
+import '../transports/ble_manager.dart';
+import '../transports/ble_platform_radio.dart';
 import '../transports/lan_manager.dart';
+import 'runtime_permissions.dart';
 import 'chat_controller.dart';
 import 'identity_store.dart';
 import 'secret_store.dart';
@@ -35,9 +38,20 @@ Future<ChatController> buildController(SecretStore store) async {
   );
   // Push-to-talk plugins exist for Android and Windows only.
   final voice = Platform.isAndroid || Platform.isWindows;
+  final lan = LanManager(node: node);
+  // Bluetooth radio code exists for Android only.
+  final permissions = RuntimePermissions();
   final controller = ChatController(
     node: node,
-    lan: LanManager(node: node),
+    lan: lan,
+    ble: Platform.isAndroid
+        ? BleManager(
+            node: node,
+            radio: BlePlatformRadio(),
+            posture: lan.posture,
+          )
+        : null,
+    bleAllowed: Platform.isAndroid ? permissions.request : null,
     store: store,
     capture: voice ? RecordVoiceCapture() : null,
     playback: voice ? SoloudVoicePlayback() : null,

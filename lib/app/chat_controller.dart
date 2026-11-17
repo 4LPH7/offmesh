@@ -11,6 +11,7 @@ import '../core/posture.dart';
 import '../core/protocol/packet.dart';
 import '../core/protocol/sealed_envelope.dart';
 import '../core/provisioning/unit_roster.dart';
+import '../transports/ble_manager.dart';
 import '../transports/lan_manager.dart';
 import '../transports/relay_transport.dart';
 import '../core/voice/tones.dart';
@@ -93,8 +94,19 @@ class ChatController extends ChangeNotifier {
     required this.store,
     this.capture,
     this.playback,
+    this.ble,
+    this.bleAllowed,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
+
+  /// Bluetooth links, where the phone has a radio; null on Windows and in most tests.
+  final BleManager? ble;
+
+  /// Asks for the Bluetooth permissions; null means no prompt is needed.
+  final Future<bool> Function()? bleAllowed;
+
+  /// Why Bluetooth is not running, or null when it is (or there is no radio).
+  String? bleStatus;
 
   /// Microphone and speaker for push-to-talk; null where voice is not available.
   final VoiceCapture? capture;
@@ -366,7 +378,11 @@ class ChatController extends ChangeNotifier {
 
   String? get lastError => _lastError;
 
-  Set<String> get linkedNeighbours => lan.linkedPeerIds;
+  /// Members linked directly, over Wi-Fi or Bluetooth.
+  Set<String> get linkedNeighbours => {
+    ...lan.linkedPeerIds,
+    ...?ble?.linkedPeerIds,
+  };
 
   List<ChatMessage> thread(String contactId) =>
       List.unmodifiable(_threads[contactId] ?? const []);
@@ -421,6 +437,7 @@ class ChatController extends ChangeNotifier {
     await _receiptSubscription?.cancel();
     await _channelSubscription?.cancel();
     await lan.stop();
+    await ble?.stop();
     _listenPort = null;
     await node.stop();
   }
@@ -631,6 +648,7 @@ class ChatController extends ChangeNotifier {
     }
     if (next == Posture.silent) {
       await lan.stop();
+      await ble?.stop();
       _listenPort = null;
     } else if (provisioned) {
       try {
@@ -638,6 +656,11 @@ class ChatController extends ChangeNotifier {
       } on StateError {
         // Silent was chosen again while the socket was binding.
         _listenPort = null;
+      }
+      if (ble?.running ?? false) {
+        await ble!.applyPosture();
+      } else {
+        await _startBle();
       }
     }
     try {
@@ -910,6 +933,7 @@ class ChatController extends ChangeNotifier {
     await _apply(roster);
     if (restartLan && _listenPort != null) {
       await lan.stop();
+      await ble?.stop();
       _listenPort = null;
     }
     await _startLan();
@@ -931,9 +955,10 @@ class ChatController extends ChangeNotifier {
         ),
     ]);
     // Seal key and roster for the wire; a member added while listening can link at once.
-    await lan.configure(await UnitKeys.derive(roster.unitSecret), [
-      for (final m in roster.members) m.publicKey,
-    ]);
+    final keys = await UnitKeys.derive(roster.unitSecret);
+    final rosterKeys = [for (final m in roster.members) m.publicKey];
+    await lan.configure(keys, rosterKeys);
+    await ble?.configure(keys, rosterKeys);
     _unit = roster;
     await _rejoinChannels(roster.unitSecret);
     // A new unit means a new seal key and rendezvous room: reconnect if online.
@@ -947,6 +972,26 @@ class ChatController extends ChangeNotifier {
   Future<void> _startLan() async {
     if (posture.current == Posture.silent) return;
     _listenPort = await lan.start();
+    await _startBle();
+  }
+
+  /// Starts Bluetooth when this phone has a radio and the user granted it. A refusal
+  /// leaves Wi-Fi working and says why.
+  Future<void> _startBle() async {
+    final radio = ble;
+    if (radio == null || radio.running || posture.current == Posture.silent) {
+      return;
+    }
+    final allowed = bleAllowed;
+    if (allowed != null && !await allowed()) {
+      bleStatus = 'Bluetooth off: permission not granted';
+      notifyListeners();
+      return;
+    }
+    await radio.start();
+    bleStatus = radio.lastError == null
+        ? null
+        : 'Bluetooth unavailable (${radio.lastError})';
   }
 
   void _append(String contactId, ChatMessage message) {

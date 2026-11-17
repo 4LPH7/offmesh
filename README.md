@@ -7,7 +7,7 @@ LAN test peer.
 This is a prototype. Read "Limits" before relying on it. The app is one talk screen:
 the channel or contact name (tap it to switch), a status line, a large hold-to-talk
 button and a text field. Unit setup and radio controls are in the menu.
-Relay Mode is Android-only; Bluetooth and store-and-forward are not connected to chat yet.
+Relay Mode and Bluetooth are Android-only.
 
 ## Implemented
 
@@ -56,10 +56,21 @@ phones on either side of midnight UTC meet in different rooms until both pass it
 Channels and push-to-talk work over the relay like over Wi-Fi. Not tested on a real
 mobile connection.
 
-## Prototypes not connected to chat
+## Bluetooth, store-and-forward and history
 
-- **Bluetooth:** the BLE codec, link, and Android radio are built and fake-tested; app discovery/peer management and posture gating are not wired. The two-phone spike is NOT RUN.
-- **Store-and-forward:** Noise K, custody envelopes, and the bounded memory store are built and tested; the app does not own or exchange them yet.
+- **Bluetooth (Android).** Once the phone is in a unit and Nearby devices permission is
+  granted, it advertises only its hourly rotating ID, scans for unit members, and links
+  to up to 6 of them over sealed GATT links, alongside Wi-Fi. Silent stops the radio and
+  closes links; Quiet stops advertising and scanning but keeps open links. Tested with a
+  fake radio only; the two-phone run is NOT RUN.
+- **Store-and-forward.** A direct message with no receipt after 15 seconds is sealed to
+  the recipient (Noise K) and handed to linked members, who carry it (at most 6 copies,
+  72 hours) until one meets the recipient. Carriers cannot read it. Normal posture only;
+  carried messages are held in memory and lost on restart.
+- **History.** Threads (the newest 100 per conversation) are kept in the secret store
+  and survive a restart. Panic wipe deletes them.
+- **Relay address by QR.** Radio and internet can show the saved relay address as a QR
+  code, and on Android scan one.
 
 ## Limits
 
@@ -79,8 +90,10 @@ mobile connection.
   sealed frames, but they can drop or delay them.
 - Frame lengths and timing stay visible on the wire.
 - **"Delivered" means the recipient's phone decrypted the message**, not that anyone read
-  it. Messages and their marks are memory-only and are lost on restart; there is no resend.
-- **No BLE or store-and-forward messaging in the running app yet.** Their code components are not connected to contacts and message flow. Voice calls are not implemented.
+  it. A message carried by store-and-forward keeps "Sent", since its receipt is not
+  carried back; a rare lost receipt can also deliver it twice. Messages held for a Quiet
+  burst are not saved across a restart.
+- Full-duplex voice calls are not implemented; push-to-talk is.
 - **A transmitting phone can always be located by radio.** No app changes that. See
   [docs/mission_plan.md](docs/mission_plan.md) for the threat model.
 
@@ -89,9 +102,9 @@ mobile connection.
 Phase 1 is complete in simulation. Phase 2 software is built; its phone/PC capture test is NOT RUN. Phase 3–5 implementation status and device gates are in [.planning/ROADMAP.md](.planning/ROADMAP.md).
 
 1. Phase 2 device acceptance.
-2. Phase 3 BLE spike, then app wiring and radio posture gates.
+2. Phase 3 BLE two-phone run (the app wiring and posture gates are built).
 3. Phase 4 phone acceptance, including Silent and screen-off relay behavior.
-4. Phase 5 app integration and store-and-forward device acceptance.
+4. Phase 5 store-and-forward device run with three phones (the app wiring is built).
 5. Phase 6: channels and push-to-talk voice bursts (walkie-talkie use).
 6. Phase 7: internet mode through a relay that sees only sealed frames, or by direct IP.
 7. Phase 8 (built): one-screen minimal UI with a large talk button.
