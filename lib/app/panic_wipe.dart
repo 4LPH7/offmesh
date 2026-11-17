@@ -1,4 +1,5 @@
 import 'channel_store.dart';
+import 'history_store.dart';
 import 'internet_store.dart';
 import 'secret_store.dart';
 import 'identity_store.dart';
@@ -13,6 +14,7 @@ const List<String> storedSecretKeys = [
   channelsKey,
   relayAddressKey,
   internetAckKey,
+  historyKey,
 ];
 
 /// Deletes every stored key. A failed delete does not stop the others; the first

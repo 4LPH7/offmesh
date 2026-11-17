@@ -178,5 +178,7 @@ void main() {
       find.descendant(of: latest, matching: find.text('two')),
       findsOneWidget,
     );
+    // Lets the delayed history save run before the test ends.
+    await tester.pump(const Duration(seconds: 1));
   });
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app/chat_controller.dart';
 import '../transports/relay_transport.dart';
+import 'unit_widgets.dart';
 
 /// Internet mode: a switch, the relay address, and what the relay can see. Off at every
 /// launch; the first time it is switched on, a warning must be accepted.
@@ -37,6 +38,29 @@ class _InternetCardState extends State<InternetCard> {
     }
     await controller.setInternet(on);
   }
+
+  /// Fills the field from a scanned QR code and saves it if it parses.
+  Future<void> _scan() async {
+    final code = await scanCode(context);
+    if (code == null || !mounted) return;
+    _address.text = code.trim();
+    await widget.controller.setRelayAddress(_address.text);
+  }
+
+  /// Shows the saved address as a QR code for another member to scan.
+  Future<void> _showQr(String address) => showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Relay address'),
+      content: SizedBox(width: 280, child: CodeView(code: address)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    ),
+  );
 
   String _status(ChatController controller) {
     if (!controller.internetOn) return 'Off. Only nearby phones are reachable.';
@@ -85,6 +109,13 @@ class _InternetCardState extends State<InternetCard> {
                     onSubmitted: controller.setRelayAddress,
                   ),
                 ),
+                if (canScanCodes)
+                  IconButton(
+                    key: const Key('relay-address-scan'),
+                    tooltip: 'Scan relay QR code',
+                    icon: const Icon(Icons.qr_code_scanner),
+                    onPressed: _scan,
+                  ),
                 const SizedBox(width: 8),
                 FilledButton(
                   key: const Key('relay-address-save'),
@@ -93,6 +124,13 @@ class _InternetCardState extends State<InternetCard> {
                 ),
               ],
             ),
+            if (controller.relayAddress != null)
+              TextButton.icon(
+                key: const Key('relay-address-qr'),
+                onPressed: () => _showQr(controller.relayAddress!),
+                icon: const Icon(Icons.qr_code),
+                label: const Text('Show as QR code'),
+              ),
           ],
         ),
       ),

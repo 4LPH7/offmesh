@@ -16,6 +16,7 @@ import '../transports/relay_transport.dart';
 import '../core/voice/tones.dart';
 import '../core/voice/voice_burst.dart';
 import 'channel_store.dart';
+import 'history_store.dart';
 import 'internet_store.dart';
 import 'voice_audio.dart';
 import 'panic_wipe.dart';
@@ -216,6 +217,27 @@ class ChatController extends ChangeNotifier {
   final DateTime Function() _clock;
 
   final Map<String, List<ChatMessage>> _threads = {};
+
+  /// Threads are written shortly after they change, so a burst of messages is one write.
+  Timer? _historyTimer;
+  bool _wiped = false;
+  static const _historyDelay = Duration(milliseconds: 500);
+
+  void _scheduleHistorySave() {
+    if (_wiped || _unit == null) return;
+    _historyTimer?.cancel();
+    _historyTimer = Timer(_historyDelay, () => unawaited(_saveHistory()));
+  }
+
+  Future<void> _saveHistory() async {
+    if (_wiped || _unit == null) return;
+    try {
+      await HistoryStore.save(store, _threads);
+    } catch (_) {
+      // Kept in memory; the next change tries again.
+    }
+  }
+
   UnitRoster? _unit;
   List<MemberInfo> _members = const [];
   String _myFingerprint = '';
@@ -327,6 +349,7 @@ class ChatController extends ChangeNotifier {
       final unit = await UnitStore.load(store);
       if (unit != null) {
         await _apply(unit);
+        _threads.addAll(await HistoryStore.load(store));
         await _startLan();
       }
     } on UnitStoreException catch (e) {
@@ -336,6 +359,10 @@ class ChatController extends ChangeNotifier {
   }
 
   Future<void> stop() async {
+    if (_historyTimer?.isActive ?? false) {
+      _historyTimer!.cancel();
+      await _saveHistory();
+    }
     await _stopInternet();
     await stopTalking();
     _voiceTicker?.cancel();
@@ -382,6 +409,7 @@ class ChatController extends ChangeNotifier {
     _channelKeys.remove(clean);
     _channelNames = List.unmodifiable(names);
     _threads.remove(conversationId);
+    _scheduleHistorySave();
     if (_selected == conversationId) _selected = null;
   });
 
@@ -572,6 +600,9 @@ class ChatController extends ChangeNotifier {
   /// controller: this node's identity is wiped and must not be used again.
   Future<bool> panicWipe() async {
     // Keys go first. A transport that fails to stop must not stop the deletes.
+    // No history write may follow the wipe.
+    _wiped = true;
+    _historyTimer?.cancel();
     _talkSender = null;
     unawaited(capture?.stop());
     var deleted = true;
@@ -618,6 +649,7 @@ class ChatController extends ChangeNotifier {
     if (thread == null) return;
     final index = thread.indexWhere((m) => identical(m, old));
     if (index >= 0) thread[index] = next;
+    _scheduleHistorySave();
   }
 
   /// Messages from senders outside the roster are dropped.
@@ -786,6 +818,7 @@ class ChatController extends ChangeNotifier {
     );
     if (index < 0) return;
     thread[index] = thread[index].asDelivered();
+    _scheduleHistorySave();
     notifyListeners();
   }
 
@@ -853,6 +886,7 @@ class ChatController extends ChangeNotifier {
 
   void _append(String contactId, ChatMessage message) {
     _threads.putIfAbsent(contactId, () => []).add(message);
+    _scheduleHistorySave();
     notifyListeners();
   }
 
