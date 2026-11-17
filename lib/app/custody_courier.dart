@@ -47,8 +47,9 @@ class CustodyCourier {
   final List<Uint8List> Function() rosterKeys;
   final Uint8List? Function(String peerHex) keyOf;
 
-  /// A message for this phone, from the member with [senderHex].
-  final void Function(String senderHex, String text) onMessage;
+  /// A message for this phone, from the member with [senderHex]. [packetId] is the one
+  /// the sender first sent it under, so a copy that also came directly can be dropped.
+  final void Function(String senderHex, int packetId, String text) onMessage;
 
   final DateTime Function() _clock;
   late final EnvelopeStore store;
@@ -62,20 +63,29 @@ class CustodyCourier {
       plaintext[0] == courierMagic[0] &&
       plaintext[1] == courierMagic[1];
 
-  /// Seals [text] to [recipientHex] and offers it to every linked member.
-  Future<bool> hold(String recipientHex, String text) async {
+  /// Seals [text] (sent first as [packetId]) to [recipientHex] and pushes it to every
+  /// linked member. Returns the envelope ID, or null when it was not held.
+  Future<Uint8List?> hold(
+    String recipientHex,
+    int packetId,
+    String text,
+  ) async {
     final key = keyOf(recipientHex);
-    if (key == null) return false;
+    if (key == null) return null;
+    final header = ByteData(4)..setUint32(0, packetId);
     final envelope = await sealCustody(
       sender: keyPair,
       recipientPublic: key,
-      plaintext: utf8.encode(text),
+      plaintext: [...header.buffer.asUint8List(), ...utf8.encode(text)],
       nowSeconds: _now(),
     );
-    if (!store.insert(envelope)) return false;
+    if (!store.insert(envelope)) return null;
     await _push(envelope);
-    return true;
+    return envelope.id;
   }
+
+  /// The recipient confirmed [id] some other way: stop carrying it.
+  void delivered(List<int> id) => store.markDelivered(id);
 
   /// Sends one new envelope to every linked member at once: whole to its recipient,
   /// half its copies to a carrier. Other held envelopes are left out.
@@ -169,14 +179,15 @@ class CustodyCourier {
       recipient: keyPair,
       rosterPublicKeys: rosterKeys(),
     );
-    if (opened == null) return;
+    if (opened == null || opened.$2.length < 4) return;
     store.markDelivered(envelope.id);
     // Tell the carrier at once, so it stops carrying this envelope.
     await _offer(fromHex, force: true);
-    final (senderKey, text) = opened;
+    final (senderKey, body) = opened;
     onMessage(
       custodyIdKey(await peerIdFor(senderKey)),
-      utf8.decode(text, allowMalformed: true),
+      ByteData.sublistView(body).getUint32(0),
+      utf8.decode(body.sublist(4), allowMalformed: true),
     );
   }
 

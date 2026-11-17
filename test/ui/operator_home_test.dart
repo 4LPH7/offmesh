@@ -11,6 +11,7 @@ import 'package:offmesh/core/posture.dart';
 import 'package:offmesh/core/provisioning/unit_roster.dart';
 import 'package:offmesh/transports/lan_manager.dart';
 import 'package:offmesh/ui/home_page.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 /// A started, provisioned controller for "Bravo" in a unit with "Alpha".
 Future<ChatController> _setUp(WidgetTester tester) async {
@@ -81,6 +82,25 @@ void main() {
       find.byWidgetPredicate((w) => w is Icon && w.semanticLabel == 'Held'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('a saved relay address can be shown as a QR code', (
+    tester,
+  ) async {
+    final controller = await _setUp(tester);
+    await tester.runAsync(
+      () => controller.setRelayAddress('relay.example.org:7000'),
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: HomePage(controller: controller)),
+    );
+    await _openControls(tester);
+    await tester.ensureVisible(find.byKey(const Key('relay-address-qr')));
+    await tester.tap(find.byKey(const Key('relay-address-qr')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byType(QrImageView), findsOneWidget);
+    expect(find.text('relay.example.org:7000'), findsWidgets);
   });
 
   testWidgets('panic wipe runs only after the word WIPE is typed', (

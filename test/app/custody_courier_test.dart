@@ -21,7 +21,10 @@ _unit() async {
       send: (peer, frame) => couriers[peer]!.handle(me, frame),
       rosterKeys: () => keys.values.toList(),
       keyOf: (peer) => keys[peer],
-      onMessage: (sender, text) => inbox.add((sender, text)),
+      onMessage: (sender, packetId, text) {
+        expect(packetId, 7);
+        inbox.add((sender, text));
+      },
     );
   }
   return (couriers, hex, inbox);
@@ -42,7 +45,7 @@ void main() {
 
       await c[a]!.tick({b});
       await c[b]!.tick({a});
-      expect(await c[a]!.hold(cc, 'over'), isTrue);
+      expect(await c[a]!.hold(cc, 7, 'over'), isNotNull);
       expect(c[b]!.store.length, 1, reason: 'B carries a copy');
       expect(inbox, isEmpty);
 

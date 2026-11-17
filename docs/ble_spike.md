@@ -2,10 +2,10 @@
 
 Status: **NOT RUN.** No Android devices were available for this run. Nothing below is a measured result.
 
-**Execution gate:** the current app does not construct `BlePlatformRadio` or expose BLE
-controls, so this procedure cannot be run with the current APK alone. The two-phone spike
-needs a diagnostic harness or app BLE integration first. Do not mark the radio rows passed
-from unit tests or an APK build.
+**Execution gate:** none. The app builds `BlePlatformRadio` through `BleManager` on Android:
+once the phone is in a unit and Nearby devices permission is granted, it advertises,
+scans and links on its own. A BLE link shows as "N linked" on the talk screen's status
+line. Do not mark the radio rows passed from unit tests or an APK build.
 
 Covers: ROADMAP phase 3, plan 03-00 (spike) and the hardware checks in plan 03-01.
 
@@ -70,8 +70,8 @@ real hardware. That needs the procedure below.
 4. After unlocking, confirm the Relay notification and service are still present. On the
    PC, `adb shell dumpsys activity services me.offmesh.offmesh` can confirm the service
    state when the Android SDK tools are installed.
-5. **Current limitation:** because BLE is not attached to MeshNode, a passing service check
-   proves only that the service survives. It does not prove BLE relaying with the screen off.
+5. BLE links are attached to MeshNode, so with Wi-Fi off a message that arrives after
+   unlocking shows that the BLE link stayed up with the screen off.
 
 ### 5. Forced MTU 23
 

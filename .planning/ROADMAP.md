@@ -73,7 +73,7 @@ Plans:
 **Goal**: Two pocketed phones exchange messages over Bluetooth with the screen off, and a third device on LAN is reached through one of them.
 **Depends on**: Phase 2
 **Requirements**: REQ-19 to REQ-22
-**Status**: BLE codec, link and Android radio code are built and fake-tested, but still provisional. The 03-00 phone spike is NOT RUN; the radio is not attached to app startup, and BLE posture gating is absent.
+**Status**: BLE codec, link, Android radio and app wiring (`BleManager`: rotating-ID advertising, scan, dial, inbound links, permission prompt, posture gates) are built and fake-tested. The 03-00 phone spike is NOT RUN.
 **Success Criteria** (what must be TRUE):
   1. `BleLink implements MeshTransport`; a 512-byte sealed frame crosses a BLE link byte-identical at the negotiated ATT MTU and at a forced MTU of 23 (link segmentation exists and is tested).
   2. Each phone advertises, scans, serves GATT, and connects as a client at the same time.
@@ -85,13 +85,14 @@ Plans:
 
 Plans:
 - [ ] 03-00: Spike, two days, throwaway code: dual-role BLE on the two real phones, 1000 writes of 200 bytes, 30 minutes screen-off. Output: go or no-go on plugin versus platform channel, observed MTU, service survival. NOT RUN.
-- [x] 03-01: Provisional BLE link, Android radio and fake-backed tests implemented before spike results; no hardware claim. App peer management and BLE posture gating remain.
+- [x] 03-01: Provisional BLE link, Android radio and fake-backed tests implemented before spike results; no hardware claim.
+- [x] 03-02: App peer management and BLE posture gating (`BleManager`), fake-radio tested; hardware NOT RUN.
 
 ### Phase 4: Operator controls
 **Goal**: The operator controls when the phone transmits and can destroy its keys at once.
 **Depends on**: Phase 3 (posture cannot be defined before BLE behaviour is known)
 **Requirements**: REQ-23 to REQ-25
-**Status**: Operator UI, LAN posture controls, panic wipe, Relay Mode and Android foreground-service plumbing are implemented and automated-tested. BLE posture is not wired; phone checks are NOT RUN.
+**Status**: Operator UI, LAN posture controls, panic wipe, Relay Mode and Android foreground-service plumbing are implemented and automated-tested. BLE posture is wired and fake-tested; phone checks are NOT RUN.
 **Success Criteria** (what must be TRUE):
   1. Silent: no sockets open, no UDP sent, no BLE advertising, all connections dropped, passive scan only.
   2. Quiet: no beacons or advertisements; outgoing messages queue until the operator presses a send-burst button.
@@ -107,7 +108,7 @@ Plans:
 **Goal**: A message for an offline recipient is delivered later by a phone that met both parties.
 **Depends on**: Phase 3, Phase 4
 **Requirements**: REQ-26 to REQ-28
-**Status**: One-way Noise K, custody envelope codecs and bounded memory store are implemented and tested as primitives. No app flow owns or exchanges envelopes; the device test is NOT RUN.
+**Status**: One-way Noise K, custody envelopes, the bounded memory store and the app flow (`CustodyCourier`) are implemented and tested; the device test is NOT RUN.
 **Success Criteria** (what must be TRUE):
   1. A message can be encrypted to a roster member's static key without an interactive handshake (one-way mode); the lost properties are documented.
   2. An envelope carries an expiry and a copy budget; carriers exchange lists of held message IDs on contact.
@@ -116,7 +117,8 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [x] 05-01: One-way encryption and custody/store primitives; app integration is outside this plan and remains undone.
+- [x] 05-01: One-way encryption and custody/store primitives.
+- [x] 05-02: App integration: 15 s fallback to custody, held-ID exchange in Noise sessions, push to recipient or carrier, dedupe by packet ID; device run NOT RUN.
 
 ### Phase 6: Channels and push-to-talk
 **Goal**: A unit talks like a walkie-talkie: pick a channel, hold a button, everyone on the channel hears it.

@@ -1,6 +1,10 @@
 # Phase 5 device test: store-and-forward
 
-Status: **NOT RUN / NOT EXECUTABLE IN THE CURRENT BUILD.** Nothing here has been verified on hardware. Noise K, custody envelopes and `EnvelopeStore` have unit tests, but no app flow owns them or exchanges envelopes. The current UI has no store-and-forward send action or custody status view. This procedure becomes runnable after Phase 5 app integration is implemented and a debug build exposes enough state to confirm custody transfer.
+Status: **NOT RUN.** Nothing here has been verified on hardware. The app now carries
+messages (`CustodyCourier`): a direct message with no receipt after 15 seconds is sealed to
+the recipient and pushed to linked members, who hand it on when they meet the recipient.
+There is no custody status view; success is the message appearing once on the PC.
+Carrying runs in Normal posture only, and carried envelopes are lost if a carrier restarts.
 
 ## Requirement under test
 

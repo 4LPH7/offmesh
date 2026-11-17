@@ -140,6 +140,6 @@ Multi-hop: add a third phone C to the unit, link it to B only, and message C fro
 ## Manual acceptance runbooks
 
 - [Phase 2 LAN and capture test](docs/device_tests.md): detailed; needs two phones, Wireshark and a Windows build. The Windows clean build now passes; device acceptance remains NOT RUN.
-- [Phase 3 BLE spike](docs/ble_spike.md): NOT RUN; current APK lacks BLE app controls, so a diagnostic harness or BLE integration is required first.
+- [Phase 3 BLE spike](docs/ble_spike.md): NOT RUN; runnable with the current APK (Bluetooth starts on its own once the phone is in a unit and permission is granted).
 - [Phase 4 operator tests](docs/operator_tests.md): Silent, Quiet, panic wipe, Relay Mode, and foreground-service steps; BLE posture is not testable until BLE is wired.
-- [Phase 5 store-and-forward test](docs/dtn_tests.md): detailed but blocked until the app owns and exchanges custody envelopes.
+- [Phase 5 store-and-forward test](docs/dtn_tests.md): NOT RUN; runnable with the current APK (a message with no receipt after 15 s is carried).

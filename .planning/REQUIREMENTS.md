@@ -31,7 +31,7 @@ wired into the running app.
 - [x] **REQ-19**: `BleLink implements MeshTransport` with link-layer segmentation that works at ATT MTU 23.
 - [ ] **REQ-20**: Dual role: advertise, scan, GATT server, and GATT client at the same time, with Android 12+ Bluetooth permissions.
 - [ ] **REQ-21**: Typed foreground service (`connectedDevice`) that keeps links alive with the screen off; service builds, screen-off behavior not device-verified and BLE is not yet wired.
-- [ ] **REQ-22**: BLE advertisements carry a rotating ID and no static identifier; implementation is not app-wired or device-verified.
+- [ ] **REQ-22**: BLE advertisements carry a rotating ID and no static identifier; app-wired, not device-verified.
 
 ## Phase 4: Operator controls
 - [x] **REQ-23**: Radio posture switch with per-transport definitions: Silent, Quiet, Normal; LAN and BLE are gated (BLE tested with a fake radio).
@@ -90,6 +90,6 @@ wired into the running app.
 ## Status notes (2026-11-15)
 - Verified in this run: `flutter test` (353 passed), `flutter analyze` (clean), format check (clean), and `flutter build apk --debug` (success).
 - No Android device is attached; `flutter devices` lists Windows, Chrome and Edge. The BLE spike and all phone procedures are NOT RUN.
-- BLE radio and foreground-service code compile into the APK, but the BLE radio is not attached to app startup; do not count this as dual-role or screen-off verification.
+- BLE radio is attached to app startup (BleManager) and fake-tested; do not count this as hardware dual-role or screen-off verification.
 - Phase 5 Noise K and envelope/store code pass automated tests but have no app contact flow.
 - Fresh Windows build and debug launch passed with MSVC 14.52 and ATL; manual provisioning and network acceptance remain NOT RUN.

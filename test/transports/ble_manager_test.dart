@@ -131,10 +131,12 @@ void main() {
       expect(bleB.linkedPeerIds, {a.peerId.hex});
 
       final got = nodeB.messages.first;
-      await nodeA.sendText(b.peerId, Uint8List.fromList(utf8.encode('over')));
+      // 600 bytes: several mesh fragments, each one sealed BLE frame.
+      final long = 'over' * 150;
+      await nodeA.sendText(b.peerId, Uint8List.fromList(utf8.encode(long)));
       expect(
         utf8.decode((await got.timeout(const Duration(seconds: 5))).plaintext),
-        'over',
+        long,
       );
 
       postureA.change(Posture.quiet);

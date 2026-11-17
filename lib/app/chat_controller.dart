@@ -105,8 +105,16 @@ class ChatController extends ChangeNotifier {
   /// Asks for the Bluetooth permissions; null means no prompt is needed.
   final Future<bool> Function()? bleAllowed;
 
+  bool _bleDenied = false;
+
   /// Why Bluetooth is not running, or null when it is (or there is no radio).
-  String? bleStatus;
+  String? get bleStatus {
+    final radio = ble;
+    if (radio == null || posture.current == Posture.silent) return null;
+    if (_bleDenied) return 'Bluetooth off: permission not granted';
+    final error = radio.lastError;
+    return error == null ? null : 'Bluetooth unavailable ($error)';
+  }
 
   /// Microphone and speaker for push-to-talk; null where voice is not available.
   final VoiceCapture? capture;
@@ -242,10 +250,14 @@ class ChatController extends ChangeNotifier {
     _historyTimer = Timer(_historyDelay, () => unawaited(_saveHistory()));
   }
 
+  Future<void>? _historyInFlight;
+
   Future<void> _saveHistory() async {
     if (_wiped || _unit == null) return;
     try {
-      await HistoryStore.save(store, _threads);
+      final save = HistoryStore.save(store, _threads);
+      _historyInFlight = save;
+      await save;
     } catch (_) {
       // Kept in memory; the next change tries again.
     }
@@ -268,10 +280,31 @@ class ChatController extends ChangeNotifier {
     clock: _clock,
   );
 
-  void _onCarried(String senderHex, String text) {
-    if (!contacts.contains(senderHex)) return;
+  // Envelope IDs of carried messages by their first packet ID, and the (sender, packet)
+  // pairs already shown, so a message that comes both ways shows once.
+  final Map<int, Uint8List> _carried = {};
+  final Set<String> _seenCopies = <String>{};
+  static const _maxSeenCopies = 512;
+
+  bool _firstCopy(String senderHex, int packetId) {
+    if (packetId == 0) return true;
+    if (!_seenCopies.add('$senderHex:$packetId')) return false;
+    if (_seenCopies.length > _maxSeenCopies) {
+      _seenCopies.remove(_seenCopies.first);
+    }
+    return true;
+  }
+
+  void _onCarried(String senderHex, int packetId, String text) {
+    if (!contacts.contains(senderHex) || !_firstCopy(senderHex, packetId)) {
+      return;
+    }
     _append(senderHex, ChatMessage(outgoing: false, text: text, at: _clock()));
   }
+
+  /// Runs one store-and-forward round now (the timer runs it every 2 s).
+  @visibleForTesting
+  Future<void> custodyTick() => _custodyTick();
 
   Future<void> _custodyTick() async {
     if (_custodyBusy || _wiped || posture.current != Posture.normal) return;
@@ -284,7 +317,12 @@ class ChatController extends ChangeNotifier {
       ];
       for (final entry in overdue) {
         _awaiting.remove(entry.key);
-        await courier.hold(entry.value.$1, entry.value.$2);
+        final id = await courier.hold(
+          entry.value.$1,
+          entry.key,
+          entry.value.$2,
+        );
+        if (id != null) _carried[entry.key] = id;
       }
       await courier.tick(linkedNeighbours.intersection(contacts.toSet()));
     } catch (_) {
@@ -660,7 +698,7 @@ class ChatController extends ChangeNotifier {
       if (ble?.running ?? false) {
         await ble!.applyPosture();
       } else {
-        await _startBle();
+        unawaited(_startBle());
       }
     }
     try {
@@ -680,6 +718,12 @@ class ChatController extends ChangeNotifier {
     // No history write may follow the wipe.
     _wiped = true;
     _historyTimer?.cancel();
+    // A save already writing must land before the delete, not after it.
+    try {
+      await _historyInFlight;
+    } catch (_) {
+      // Its failure does not matter: the key is deleted next.
+    }
     _talkSender = null;
     unawaited(capture?.stop());
     var deleted = true;
@@ -703,6 +747,8 @@ class ChatController extends ChangeNotifier {
     _channelNames = const [];
     _queue.clear();
     _awaiting.clear();
+    _carried.clear();
+    _seenCopies.clear();
     courier.clear();
     if (!deleted) {
       // The radios are already off on purpose: nothing arrives until the app restarts.
@@ -737,9 +783,13 @@ class ChatController extends ChangeNotifier {
     if (!contacts.contains(id)) return;
     _heard(id);
     if (CustodyCourier.isFrame(message.plaintext)) {
-      unawaited(courier.handle(id, message.plaintext));
+      // Carrying transmits, so only Normal answers store-and-forward frames.
+      if (posture.current == Posture.normal) {
+        unawaited(courier.handle(id, message.plaintext));
+      }
       return;
     }
+    if (!_firstCopy(id, message.packetId)) return;
     _append(
       id,
       ChatMessage(
@@ -895,6 +945,8 @@ class ChatController extends ChangeNotifier {
 
   void handleReceipt(DeliveryReceiptEvent event) {
     _awaiting.remove(event.receipt.packetId);
+    final carried = _carried.remove(event.receipt.packetId);
+    if (carried != null) courier.delivered(carried);
     final thread = _threads[event.peerId.hex];
     if (thread == null) return;
     final index = thread.indexWhere(
@@ -972,26 +1024,27 @@ class ChatController extends ChangeNotifier {
   Future<void> _startLan() async {
     if (posture.current == Posture.silent) return;
     _listenPort = await lan.start();
-    await _startBle();
+    // Not awaited: the permission prompt must never hold up launch or the screen.
+    unawaited(_startBle());
   }
 
   /// Starts Bluetooth when this phone has a radio and the user granted it. A refusal
-  /// leaves Wi-Fi working and says why.
+  /// or a radio failure leaves Wi-Fi working and shows on the status line.
   Future<void> _startBle() async {
     final radio = ble;
     if (radio == null || radio.running || posture.current == Posture.silent) {
       return;
     }
-    final allowed = bleAllowed;
-    if (allowed != null && !await allowed()) {
-      bleStatus = 'Bluetooth off: permission not granted';
-      notifyListeners();
-      return;
+    try {
+      final allowed = bleAllowed;
+      _bleDenied = allowed != null && !await allowed();
+      if (!_bleDenied && posture.current != Posture.silent && !_wiped) {
+        await radio.start();
+      }
+    } catch (_) {
+      radio.lastError ??= 'start failed';
     }
-    await radio.start();
-    bleStatus = radio.lastError == null
-        ? null
-        : 'Bluetooth unavailable (${radio.lastError})';
+    notifyListeners();
   }
 
   void _append(String contactId, ChatMessage message) {

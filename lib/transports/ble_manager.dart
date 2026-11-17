@@ -60,6 +60,7 @@ class BleManager {
   StreamSubscription<BleSighting>? _sightingSub;
   StreamSubscription<BleChannel>? _inboundSub;
   final Map<String, BleLink> _links = {};
+  final Map<String, bool> _dialedByMe = {};
   final Set<String> _dialing = {};
   final Set<String> _backingOff = {};
   int _generation = 0;
@@ -156,6 +157,7 @@ class BleManager {
     await _stopDiscovery();
     final links = _links.values.toList();
     _links.clear();
+    _dialedByMe.clear();
     _dialing.clear();
     _backingOff.clear();
     for (final link in links) {
@@ -240,13 +242,19 @@ class BleManager {
       return false;
     }
     final key = _hex(remote);
-    if (generation != _generation ||
-        key == _hex(node.peerId) ||
-        _links.containsKey(key)) {
+    final existing = _links[key];
+    // Two dials that cross: both ends keep the link the lower PeerID dialed.
+    final selfIsLower = _hex(node.peerId).compareTo(key) < 0;
+    final keepNew =
+        existing == null ||
+        (channel.isClient == selfIsLower && _dialedByMe[key] != selfIsLower);
+    if (generation != _generation || key == _hex(node.peerId) || !keepNew) {
       await link.close();
       return false;
     }
     _links[key] = link;
+    _dialedByMe[key] = channel.isClient;
+    if (existing != null) unawaited(existing.close());
     node.addTransport(link);
     unawaited(
       link.closed.then((_) async {

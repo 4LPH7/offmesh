@@ -25,10 +25,17 @@ const int _handshakeTwoMinLength =
     96; // e, encrypted s, encrypted empty payload
 
 class ReceivedMessage {
-  const ReceivedMessage({required this.senderId, required this.plaintext});
+  const ReceivedMessage({
+    required this.senderId,
+    required this.plaintext,
+    this.packetId = 0,
+  });
 
   final Uint8List senderId;
   final Uint8List plaintext;
+
+  /// The sender's packet ID, the same one its receipt carries.
+  final int packetId;
 }
 
 /// A message on a joined channel. [channelTag] names the channel; [senderId] is the
@@ -377,7 +384,11 @@ class MeshNode {
       ),
     );
     _inbox.add(
-      ReceivedMessage(senderId: packet.senderId, plaintext: plaintext),
+      ReceivedMessage(
+        senderId: packet.senderId,
+        plaintext: plaintext,
+        packetId: packet.packetId,
+      ),
     );
     await _sendReceipt(packet.senderId, session, packet.packetId);
   }
